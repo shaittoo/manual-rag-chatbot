@@ -1,0 +1,22 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+
+# --- Embeddings + vector store ---
+sentence-transformers==3.3.1
+chromadb==0.5.23
+
+# --- PDF parsing ---
+pypdf==5.1.0
+
+# --- Generator (Phi-3-mini via Hugging Face Transformers) ---
+# torch is intentionally unpinned to let pip pick the CPU/CUDA build for your platform.
+# On Windows CPU-only:  pip install torch
+# On CUDA 12.1:         pip install torch --index-url https://download.pytorch.org/whl/cu121
+torch
+transformers==4.46.3
+accelerate==1.1.1
+
+# --- Optional but recommended ---
+python-multipart==0.0.19   # for FastAPI file uploads if you add /upload later
