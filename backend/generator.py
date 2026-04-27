@@ -33,16 +33,13 @@ MODEL_NAME = os.environ.get("GENERATOR_MODEL", "microsoft/Phi-3-mini-4k-instruct
 # --- Model loading -------------------------------------------------------
 
 def _device_and_dtype():
-    """
-    Pick the best device + dtype combo we can.
-    - CUDA: float16, dramatic speedup
-    - Apple silicon (mps): float16
-    - CPU: float32 (float16 on CPU is slower than fp32 in PyTorch)
-    """
     if torch.cuda.is_available():
+        print("USING CUDA:", torch.cuda.get_device_name(0), flush=True)
         return "cuda", torch.float16
     if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("USING MPS", flush=True)
         return "mps", torch.float16
+    print("USING CPU", flush=True)
     return "cpu", torch.float32
 
 
@@ -113,7 +110,8 @@ def _build_messages(question: str, chunks: List[RetrievedChunk]):
 def generate(
     question: str,
     chunks: List[RetrievedChunk],
-    max_new_tokens: int = 350,
+    # max_new_tokens: int = 350,
+    max_new_tokens: int = 100,
     temperature: float = 0.0,
 ) -> str:
     """
