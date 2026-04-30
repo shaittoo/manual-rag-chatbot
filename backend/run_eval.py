@@ -74,8 +74,8 @@ REQUEST_TIMEOUT = 600
 #   10, 15  -> questions 11 to 15
 #   15, 20  -> questions 16 to 20
 #   20, 25  -> questions 21 to 25
-START_INDEX = 0
-END_INDEX = 5
+START_INDEX = 20
+END_INDEX = 25
 
 # If True, append to existing results.csv.
 # Keep this True when running batches.
