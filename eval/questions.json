@@ -1,0 +1,181 @@
+[
+  {
+    "id": "service_manual_18_q01",
+    "manual_filename": "Service-Manual-18.pdf",
+    "question": "My aircon is on but the room is still hot. What should I check?",
+    "reference_answer": "For no cooling or poor cooling with no error code, the manual says the unit should first be operated for at least 15 minutes before diagnosis. The user or technician should check whether there are obstacles blocking heat release or air suction, whether the indoor air filters are clean, and whether the remote controller temperature setting is correct. In cooling operation, the temperature difference between intake air and discharge air should be more than 8°C. If performance is still poor, possible causes include heat releasing obstruction, dirty condenser, lack of refrigerant gas, excess refrigerant, air or moisture mixed in the system, clogged capillary or expansion valve malfunction, or compressor malfunction.",
+    "type": "procedural"
+  },
+  {
+    "id": "service_manual_18_q02",
+    "manual_filename": "Service-Manual-18.pdf",
+    "question": "The AC is supposed to heat the room, but the air does not feel warm enough. What does the manual say to do?",
+    "reference_answer": "The manual says to operate the unit in cooling or heating mode for 15 minutes or more before evaluating performance. For heating operation, the difference between the intake temperature and discharge air temperature should be more than 14°C. Initial checks include confirming that airflow is not blocked, the indoor air filters are clean, and the remote controller setting temperature is correct.",
+    "type": "procedural"
+  },
+  {
+    "id": "service_manual_18_q03",
+    "manual_filename": "Service-Manual-18.pdf",
+    "question": "The timer light keeps blinking on my air conditioner. What does that mean?",
+    "reference_answer": "The manual states that if the Timer LED is blinking, an abnormal operation has occurred. To identify the abnormality, the self-diagnosis method uses the remote controller CHECK function. Press CHECK continuously for 5 seconds until '--' appears, then press the TIMER up or down button to transmit abnormality codes. When the transmitted code matches the latest abnormality stored in the main unit, the Power LED lights for 30 seconds and a continuous beep sounds for 4 seconds.",
+    "type": "procedural"
+  },
+  {
+    "id": "service_manual_18_q04",
+    "manual_filename": "Service-Manual-18.pdf",
+    "question": "The indoor fan is not spinning or seems stuck. What could be the problem?",
+    "reference_answer": "The manual lists error code H19 for indoor fan motor mechanism lock or feedback abnormality. This condition is judged when the fan motor abnormality occurs continuously 7 times. The check locations include the fan motor lead wire and connector, and whether the fan motor is locked or blocked.",
+    "type": "factual"
+  },
+  {
+    "id": "service_manual_18_q05",
+    "manual_filename": "Service-Manual-18.pdf",
+    "question": "My aircon is not cooling, but there is no blinking light. Is it still possible that something is wrong?",
+    "reference_answer": "Yes. The manual includes abnormalities that may be stored without Timer LED blinking. One example is H99, which is indoor freeze prevention protection during cooling or soft dry operation. For H99, the error code does not display and the Timer LED does not blink, but the code is stored in EEPROM. Possible causes include indoor air short circuit, clogged indoor air filter, dust on the indoor heat exchanger, closed 2-way or 3-way valve, faulty indoor fan motor, refrigerant shortage or leakage, clogged expansion valve or strainer, faulty indoor pipe temperature sensor, or faulty indoor unit PCB.",
+    "type": "tricky"
+  },
+  {
+    "id": "hp_laserjet_m329_m428_m429_q01",
+    "manual_filename": "c06184015.pdf",
+    "question": "My printer keeps jamming paper. What should I try first?",
+    "reference_answer": "The manual says that if paper jams frequently, first clear the jam and print a configuration page to test the printer. Then check that the tray is configured for the correct paper size and type on the printer control panel. If needed, adjust the paper settings under Setup > Paper setup. The manual also says to turn the printer off, wait 30 seconds, and turn it on again, then print a cleaning page under Printer Maintenance > Print Quality Tools > Cleaning Page. If the problem still continues, print another configuration page and contact HP customer support if none of the steps resolves the issue.",
+    "type": "procedural"
+  },
+  {
+    "id": "hp_laserjet_m329_m428_m429_q02",
+    "manual_filename": "c06184015.pdf",
+    "question": "The printer is not grabbing the paper from the tray. What should I check?",
+    "reference_answer": "The manual says to open the printer and remove any jammed paper, making sure no torn pieces remain inside. Then load the tray with the correct paper size for the job, confirm that the paper size and type are set correctly on the printer control panel, and adjust the paper guides to the correct tray markings without pushing them too tightly against the paper. It also recommends checking room humidity and paper storage, flexing the paper stack if sheets are sticking, checking whether the printer is asking for manual feed, and cleaning the rollers with a lint-free cloth dampened with warm water.",
+    "type": "procedural"
+  },
+  {
+    "id": "hp_laserjet_m329_m428_m429_q03",
+    "manual_filename": "c06184015.pdf",
+    "question": "My printouts are faded or too light. What can I do?",
+    "reference_answer": "For light or faded print, the manual says to reprint the document, remove the toner cartridge and shake it to redistribute the toner, make sure EconoMode is disabled on mono models, check that the cartridge is installed correctly, and print a Supplies Status Page to check the life and usage of the cartridge. The manual also says print quality problems can occur when a toner cartridge is at its estimated end of life, and the toner cartridge should be replaced if print quality is no longer acceptable.",
+    "type": "procedural"
+  },
+  {
+    "id": "hp_laserjet_m329_m428_m429_q04",
+    "manual_filename": "c06184015.pdf",
+    "question": "The printer says the toner is low. Do I need to replace it right away?",
+    "reference_answer": "No, not always. The manual says that when 'Cartridge is low' or 'Cartridge is very low' appears, the actual cartridge life remaining may vary. The toner cartridge does not need to be replaced immediately unless print quality is no longer acceptable. The manual recommends having a replacement cartridge available and continuing to print with the current cartridge until redistributing the toner no longer gives acceptable print quality. To redistribute toner, remove the toner cartridge and gently rock it back and forth about its horizontal axis, then reinstall it.",
+    "type": "tricky"
+  },
+  {
+    "id": "hp_laserjet_m329_m428_m429_q05",
+    "manual_filename": "c06184015.pdf",
+    "question": "My wireless printer is connected but it still will not print. What should I check?",
+    "reference_answer": "The manual's wireless troubleshooting section includes checks such as whether the printer prints after wireless configuration, whether the computer has a third-party firewall installed, whether the wireless connection stopped working after moving the router or printer, whether more computers can connect to the wireless printer, whether the printer loses communication when connected to a VPN, whether the network appears in the wireless networks list, and whether the wireless network is functioning. It also recommends performing a wireless network diagnostic test and reducing interference on the wireless network.",
+    "type": "procedural"
+  },
+
+  {
+    "id": "epson_et4850_q01",
+    "manual_filename": "cpd60205.pdf",
+    "question": "My Epson printer will not connect to Wi-Fi. What should I check?",
+    "reference_answer": "The manual says to make sure the wireless router or access point is turned on and correctly connected to the computer or network device. If setup fails, the user should confirm the correct wireless network name or SSID and password, because the network name and password are case sensitive. The manual also recommends moving the product closer to the router or access point, removing obstacles between them, moving the product away from devices such as wireless phones or microwaves, turning the router or access point off, waiting about 10 seconds, and turning it on again. The user can also print a network connection report from Settings > General Settings > Network Settings > Connection Check > Print Check Report to view error codes and solutions.",
+    "type": "procedural"
+  },
+  {
+    "id": "epson_et4850_q02",
+    "manual_filename": "cpd60205.pdf",
+    "question": "The paper keeps jamming or feeding badly. What can I do?",
+    "reference_answer": "The manual says to load only the recommended number of sheets, load paper short edge first with the printable side facedown, and make sure the paper is under the tabs on the edge guides and not sticking out from the rear of the cassette. The user should fan and align the edges of plain paper before loading, flatten curled paper or curl it slightly in the opposite direction, and reduce the number of sheets or load one sheet at a time if paper jams continue during manual 2-sided printing. For paper feeding problems, the manual also recommends making sure the edge guides are against the paper but not too tightly.",
+    "type": "procedural"
+  },
+  {
+    "id": "epson_et4850_q03",
+    "manual_filename": "cpd60205.pdf",
+    "question": "My printout has white lines, gaps, or looks faded. How do I fix it?",
+    "reference_answer": "The manual points users to print head maintenance for print quality problems. It includes print head nozzle check, print head cleaning, and power cleaning procedures. For faded printouts or gaps, the user should check the nozzles and clean the print head if needed. The manual also warns that the actual ink levels should be checked visually in the ink tanks, because the printer estimates ink levels by monitoring ink usage and cannot directly measure the ink in the tanks. Continued use when ink is below the lower line could damage the product.",
+    "type": "procedural"
+  },
+  {
+    "id": "epson_et4850_q04",
+    "manual_filename": "cpd60205.pdf",
+    "question": "The printer says I need to reset ink levels. Does that mean the ink tank is actually full?",
+    "reference_answer": "Not necessarily. The manual explains that the product has a low ink alert system, but it cannot directly measure the ink levels in the tanks. It estimates remaining ink by internally monitoring ink usage, so the low ink alert system may generate inaccurate messages if the ink tanks are not refilled correctly. The manual says to visually check the ink levels in the product's ink tanks and make sure the ink levels are above the lower lines. Epson recommends filling an ink tank to the upper line before resetting the ink level.",
+    "type": "tricky"
+  },
+  {
+    "id": "epson_et4850_q05",
+    "manual_filename": "cpd60205.pdf",
+    "question": "I cannot scan from the printer to my computer. What should I check first?",
+    "reference_answer": "The manual says that before scanning to a connected computer, the computer must be connected using a USB cable or connected to the same network as the product. Epson ScanSmart, Epson Scan 2, and Event Manager must also be installed on the computer. The manual also notes that the computer should be restarted after installing the product software to enable scanning from the control panel. From the printer control panel, the user should select Scan > Computer, then choose the connected computer from the list or select USB Connection if connected by USB.",
+    "type": "procedural"
+  },
+  {
+    "id": "samsung_rf6500c_q01",
+    "manual_filename": "DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf",
+    "question": "My refrigerator is on but it is not getting cold enough. What should I check?",
+    "reference_answer": "The manual says to check whether the power cord is plugged in properly, whether the temperature control is set correctly, and whether the refrigerator is located near direct sunlight or a heat source. It also says to make sure there is at least a 2 inch or 5 cm gap between the refrigerator back and sides and nearby walls or cabinets. If the refrigerator is overloaded or food is blocking the vents, the user should reduce the load and keep food away from the vents. If Energy Saver mode is activated, the manual says to deactivate it.",
+    "type": "procedural"
+  },
+  {
+    "id": "samsung_rf6500c_q02",
+    "manual_filename": "DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf",
+    "question": "There is frost building up inside my freezer or around the vents. What could be causing it?",
+    "reference_answer": "The manual says frost around the vents can happen when food is blocking the vents, so the user should make sure no food blocks the refrigerator vents. Frost on the interior walls can happen when the door is not closed properly. The manual recommends making sure food does not block the door and cleaning the door gasket. It also warns not to store too much food in the freezer drawer because this can prevent the drawer from closing properly and cause frost buildup.",
+    "type": "procedural"
+  },
+  {
+    "id": "samsung_rf6500c_q03",
+    "manual_filename": "DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf",
+    "question": "My ice maker is not making ice. What should I try?",
+    "reference_answer": "The manual says ice may take about 24 hours after installation, or 1 to 2 days for the refrigerator to make ice. The user should make sure the ice maker is turned on, the water line is connected properly, and the water supply is on. The freezer temperature should be below 0°F (-18°C), or -4°F (-20°C) in warm ambient air. If the dispenser panel lock is activated, it should be deactivated. If too much ice is stacked at the rear of the bucket, gently shake the bucket to level the ice. For diagnosis, the manual says to press the Test button on the ice maker; a chime should sound, and another chime means the ice maker is operating properly.",
+    "type": "procedural"
+  },
+  {
+    "id": "samsung_rf6500c_q04",
+    "manual_filename": "DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf",
+    "question": "Water is not coming out of the dispenser. What might be wrong?",
+    "reference_answer": "The manual says water may not dispense if the water line is not connected properly or the water supply is not on, so the user should check the water installation conditions. It also says to deactivate the dispenser panel lock if it is on. If a third-party water filter was installed, the manual says to use only Samsung-provided or approved filters because unapproved filters may leak and damage the refrigerator. If the water filter indicator turns on or blinks, the user should replace the water filter and then reset the filter indicator sensor.",
+    "type": "procedural"
+  },
+  {
+    "id": "samsung_rf6500c_q05",
+    "manual_filename": "DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf",
+    "question": "My refrigerator is making buzzing, cracking, bubbling, or whooshing sounds. Is that normal?",
+    "reference_answer": "Yes, many sounds are normal according to the manual. Clicking or chirping may happen when starting or ending an operation. Fan sounds can occur while the fan is operating and should stop when the refrigerator reaches the set temperature. Sizzling can happen during defrost when water drips on the defrost heater. Bubbling can happen as refrigerant gas moves through sealed pipes. Cracking or knocking can happen as plastic parts expand or contract during temperature changes, defrosting, or electronic operation. For ice maker models, buzzing can occur when the water valve opens to fill the ice maker, and whooshing can happen because of pressure equalizing when opening and closing the doors.",
+    "type": "tricky"
+  },
+
+  {
+    "id": "lg_wm4200_wm4000_q01",
+    "manual_filename": "db05a9.pdf",
+    "question": "My washer is not filling with water. What should I check?",
+    "reference_answer": "The manual says an IE inlet error can happen if the water supply faucets are not fully open, the inlet hoses are kinked, pinched, or crushed, the water inlet filters are clogged, the household water pressure is too low, or leak-limiting hoses are being used. The user should make sure the faucets are fully open, check that the hoses are not kinked or crushed behind or under the washer, clean the inlet filters, check another faucet in the house for adequate water pressure, flush the inlet hoses, and avoid using leak-limiting hoses because they may prevent the washer from filling properly.",
+    "type": "procedural"
+  },
+  {
+    "id": "lg_wm4200_wm4000_q02",
+    "manual_filename": "db05a9.pdf",
+    "question": "My washer will not drain or the OE error is showing. What should I do?",
+    "reference_answer": "The manual says an OE water outlet error can happen when the drain hose is kinked, pinched, or clogged, or when the end of the drain hose is more than 96 inches or 2.4 meters above the bottom of the washer. The user should make sure the drain hose is free of clogs or kinks and is not pinched behind or under the washer. The drain hose end should be moved lower than 96 inches above the washer bottom. The manual also says the drain pump filter should be cleaned if it is clogged with dirt.",
+    "type": "procedural"
+  },
+  {
+    "id": "lg_wm4200_wm4000_q03",
+    "manual_filename": "db05a9.pdf",
+    "question": "My washer is shaking a lot and making loud banging sounds. What could be wrong?",
+    "reference_answer": "The manual says vibration or banging can happen if shipping materials were not removed, the load is unevenly distributed, not all leveling feet are resting firmly and evenly on the floor, or the floor is not rigid enough. It recommends checking that all shipping bolts and retainers have been removed, pausing the cycle and redistributing the load after the door unlocks, leveling the washer again, making sure all four leveling feet rest firmly on the floor, and installing the washer on a solid floor that does not flex.",
+    "type": "procedural"
+  },
+  {
+    "id": "lg_wm4200_wm4000_q04",
+    "manual_filename": "db05a9.pdf",
+    "question": "There is water leaking from my washer. What should I inspect first?",
+    "reference_answer": "The manual says water leaking may be caused by hoses that are not connected correctly, clogged house drain pipes, a drain hose that has come out of the drain connector or is not inserted far enough, or oversudsing from detergent. The user should check hoses and connectors for leaks, cracks, and splits, tighten hose connections, check whether water backs up from the drain pipe during draining, secure the drain hose to the inlet hose or standpipe, and use only HE detergent in the correct amount. The normal detergent amount is about 1/4 to 1/2 of the maximum amount recommended by the detergent manufacturer.",
+    "type": "procedural"
+  },
+  {
+    "id": "lg_wm4200_wm4000_q05",
+    "manual_filename": "db05a9.pdf",
+    "question": "My washer smells musty or moldy. How do I fix it?",
+    "reference_answer": "The manual says musty or mildewy odor can happen if incorrect or too much detergent has been used, or if the inside of the drum was not cleaned properly. It recommends using only HE detergent according to the manufacturer’s instructions and running the Tub Clean cycle regularly. The manual says to run Tub Clean monthly to remove residue and prevent odor, and more often under heavy use or if odor is already present. If mildew or musty smell already exists, run Tub Clean once a week for three consecutive weeks. It also recommends wiping the door and door seal after washing, leaving the door open to dry the drum, cleaning the dispenser drawer once or twice a month, cleaning the door seal monthly, and cleaning the drain pump filter regularly.",
+    "type": "tricky"
+  }
+
+]
+

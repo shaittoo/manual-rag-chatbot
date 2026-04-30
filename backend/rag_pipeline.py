@@ -32,7 +32,7 @@ class Answer:
     sources: List[Source]
 
 
-def _to_source(chunk: RetrievedChunk, snippet_chars: int = 240) -> Source:
+def _to_source(chunk: RetrievedChunk, snippet_chars: int = 600) -> Source:
     snippet = chunk.text.strip().replace("\n", " ")
     if len(snippet) > snippet_chars:
         snippet = snippet[:snippet_chars].rsplit(" ", 1)[0] + "…"
