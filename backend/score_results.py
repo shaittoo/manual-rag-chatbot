@@ -31,8 +31,8 @@ from typing import Any
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
 
-INPUT_PATH = PROJECT_ROOT / "eval" / "results.csv"
-OUTPUT_PATH = PROJECT_ROOT / "eval" / "results_scored.csv"
+INPUT_PATH = PROJECT_ROOT / "eval" / "results_v1_cuda.csv"
+OUTPUT_PATH = PROJECT_ROOT / "eval" / "results_scored_v1_cuda.csv"
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "qwen2.5:3b"
