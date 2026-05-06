@@ -1,0 +1,19 @@
+{
+  "tag": "v1_smoke",
+  "sample_count": 2,
+  "elapsed_seconds": 2482.8,
+  "judge_model": "qwen2.5:3b",
+  "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "metrics": {
+    "faithfulness": 0.0,
+    "answer_relevancy": 0.5553,
+    "llm_context_precision_with_reference": 0.3194,
+    "context_recall": 0.6667
+  },
+  "metric_columns": [
+    "faithfulness",
+    "answer_relevancy",
+    "llm_context_precision_with_reference",
+    "context_recall"
+  ]
+}

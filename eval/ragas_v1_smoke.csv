@@ -1,0 +1,3 @@
+id,manual_filename,type,question,latency_ms,status_code,faithfulness,answer_relevancy,llm_context_precision_with_reference,context_recall
+service_manual_18_q01,Service-Manual-18.pdf,procedural,My aircon is on but the room is still hot. What should I check?,204075.37,200,,0.5965,0.6389,1.0
+service_manual_18_q02,Service-Manual-18.pdf,procedural,"The AC is supposed to heat the room, but the air does not feel warm enough. What does the manual say to do?",189475.27,200,0.0,0.5141,0.0,0.3333
