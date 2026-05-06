@@ -1,0 +1,19 @@
+{
+  "tag": "v1",
+  "sample_count": 25,
+  "elapsed_seconds": 34937.8,
+  "judge_model": "qwen2.5:3b",
+  "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "metrics": {
+    "faithfulness": 0.4939,
+    "answer_relevancy": 0.7563,
+    "llm_context_precision_with_reference": 0.8211,
+    "context_recall": 0.8697
+  },
+  "metric_columns": [
+    "faithfulness",
+    "answer_relevancy",
+    "llm_context_precision_with_reference",
+    "context_recall"
+  ]
+}
