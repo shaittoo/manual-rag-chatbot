@@ -23,7 +23,9 @@ from sentence_transformers import SentenceTransformer
 # contrastive objective and consistently outperforms MiniLM on retrieval
 # benchmarks (e.g. MTEB). Vector dimensionality matches MiniLM, but the vector
 # space is different — ChromaDB MUST be re-ingested after this change.
-DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+# DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+
+DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 @lru_cache(maxsize=1)

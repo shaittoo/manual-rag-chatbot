@@ -54,7 +54,7 @@ if not QUESTIONS_PATH.exists():
     QUESTIONS_PATH = BACKEND_DIR / "eval" / "questions.json"
 
 RESULTS_DIR = PROJECT_ROOT / "eval"
-RESULTS_PATH = RESULTS_DIR / "results.csv"
+RESULTS_PATH = RESULTS_DIR / "results_v1_cuda.csv"
 
 ASK_URL = "http://localhost:8000/ask"
 
@@ -78,12 +78,12 @@ REQUEST_TIMEOUT = 1200
 #   20, 25  -> questions 21 to 25
 #   0, 25   -> ALL 25 questions in one shot (set APPEND_RESULTS=False to overwrite)
 START_INDEX = 0
-END_INDEX = 5
+END_INDEX = 25
 
 # If True, append to existing results.csv.
 # Set to False when doing a fresh full run for a new variant (V2, V3, etc.)
 # so the old results aren't mixed with the new ones.
-APPEND_RESULTS = True
+APPEND_RESULTS = False
 
 
 # ---------------------------------------------------------------------

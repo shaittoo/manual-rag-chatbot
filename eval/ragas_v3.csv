@@ -1,0 +1,26 @@
+id,manual_filename,type,question,latency_ms,status_code,faithfulness,answer_relevancy,llm_context_precision_with_reference,context_recall
+service_manual_18_q01,Service-Manual-18.pdf,procedural,My aircon is on but the room is still hot. What should I check?,19558.5,200,0.5,0.4883,1.0,0.5
+service_manual_18_q02,Service-Manual-18.pdf,procedural,"The AC is supposed to heat the room, but the air does not feel warm enough. What does the manual say to do?",6458.03,200,0.0,,0.0,0.0
+service_manual_18_q03,Service-Manual-18.pdf,procedural,The timer light keeps blinking on my air conditioner. What does that mean?,5763.99,200,0.0,0.0,1.0,0.75
+service_manual_18_q04,Service-Manual-18.pdf,factual,The indoor fan is not spinning or seems stuck. What could be the problem?,5815.32,200,,0.7885,0.8056,0.3333
+service_manual_18_q05,Service-Manual-18.pdf,tricky,"My aircon is not cooling, but there is no blinking light. Is it still possible that something is wrong?",6344.22,200,,0.7211,1.0,
+hp_laserjet_m329_m428_m429_q01,c06184015.pdf,procedural,My printer keeps jamming paper. What should I try first?,13802.0,200,0.4,0.2375,0.6389,0.0
+hp_laserjet_m329_m428_m429_q02,c06184015.pdf,procedural,The printer is not grabbing the paper from the tray. What should I check?,6502.42,200,,0.5463,1.0,1.0
+hp_laserjet_m329_m428_m429_q03,c06184015.pdf,procedural,My printouts are faded or too light. What can I do?,6545.08,200,0.0,0.7486,0.75,1.0
+hp_laserjet_m329_m428_m429_q04,c06184015.pdf,tricky,The printer says the toner is low. Do I need to replace it right away?,6140.27,200,0.0,0.4372,0.8056,
+hp_laserjet_m329_m428_m429_q05,c06184015.pdf,procedural,My wireless printer is connected but it still will not print. What should I check?,6429.74,200,,0.639,0.5,
+epson_et4850_q01,cpd60205.pdf,procedural,My Epson printer will not connect to Wi-Fi. What should I check?,6763.75,200,0.4,0.94,0.8333,0.0
+epson_et4850_q02,cpd60205.pdf,procedural,The paper keeps jamming or feeding badly. What can I do?,6739.57,200,0.6667,0.6392,1.0,
+epson_et4850_q03,cpd60205.pdf,procedural,"My printout has white lines, gaps, or looks faded. How do I fix it?",6170.86,200,0.0,0.0081,1.0,0.8
+epson_et4850_q04,cpd60205.pdf,tricky,The printer says I need to reset ink levels. Does that mean the ink tank is actually full?,5591.0,200,1.0,0.0,1.0,1.0
+epson_et4850_q05,cpd60205.pdf,procedural,I cannot scan from the printer to my computer. What should I check first?,6357.33,200,0.75,0.4826,1.0,0.0
+samsung_rf6500c_q01,DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf,procedural,My refrigerator is on but it is not getting cold enough. What should I check?,6341.12,200,0.3333,0.6568,0.9167,1.0
+samsung_rf6500c_q02,DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf,procedural,There is frost building up inside my freezer or around the vents. What could be causing it?,6233.0,200,1.0,0.9211,0.9167,1.0
+samsung_rf6500c_q03,DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf,procedural,My ice maker is not making ice. What should I try?,6582.38,200,,,0.8056,
+samsung_rf6500c_q04,DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf,procedural,Water is not coming out of the dispenser. What might be wrong?,6118.42,200,,0.7172,1.0,0.75
+samsung_rf6500c_q05,DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf,tricky,"My refrigerator is making buzzing, cracking, bubbling, or whooshing sounds. Is that normal?",5794.54,200,0.6667,0.0,1.0,1.0
+lg_wm4200_wm4000_q01,db05a9.pdf,procedural,My washer is not filling with water. What should I check?,6244.7,200,,0.3954,0.75,1.0
+lg_wm4200_wm4000_q02,db05a9.pdf,procedural,My washer will not drain or the OE error is showing. What should I do?,6076.56,200,0.3333,0.5493,1.0,0.6667
+lg_wm4200_wm4000_q03,db05a9.pdf,procedural,My washer is shaking a lot and making loud banging sounds. What could be wrong?,6409.86,200,0.75,0.7812,0.5833,
+lg_wm4200_wm4000_q04,db05a9.pdf,procedural,There is water leaking from my washer. What should I inspect first?,5293.08,200,0.0,0.228,1.0,0.8
+lg_wm4200_wm4000_q05,db05a9.pdf,tricky,My washer smells musty or moldy. How do I fix it?,6328.16,200,0.0,0.8793,1.0,1.0
