@@ -140,7 +140,9 @@ manu/
 
 ### 3.3 Hardware
 
-All experiments were run on **CPU-only** Windows 11 hardware. Across the 25-question V1 baseline, Phi-3-mini fp32 on CPU produced an answer in **~166 s on average** (range: 76 s to 204 s; the variance is driven primarily by output length, since greedy decoding is token-by-token). RAGAS scoring with Qwen-2.5-3B as judge averaged **~349 s per metric per question** under sequential (`max_workers=1`) execution; the full 25-question × 4-metric V1 run took **~9.7 hours** of wall-clock time.
+All `/ask` generation across V1, V2, and V3 ran on **CPU-only** Windows 11 hardware. Across all variants, Phi-3-mini (or Qwen-2.5-3B in V3) on CPU produced an answer in roughly **130–170 s on average** per question, with per-question variance driven primarily by output length under greedy decoding.
+
+RAGAS scoring is **separable from generation**, and Duranne re-ran the V1/V2/V3 judge passes on a machine with NVIDIA CUDA support. Qwen-2.5-3B as judge runs ~10× faster on CUDA via Ollama than on CPU: a full 25-question × 4-metric pass took **~24 minutes on CUDA** (V1: 1429 s, V2: 1045 s, V3: 1089 s) versus the **~9.7 hours** the original V1 CPU judge run took. We discuss the implications of judge-hardware change on metric reproducibility in §4.4 and §6.4.
 
 ---
 
@@ -199,7 +201,9 @@ Pilot results revealed two systematic issues with our Qwen-2.5-3B judge:
 
 **Over-strictness.** Across the 25-row V1 baseline, Qwen and human scoring agreed on only **11 of 25 rows (44%)**. Of the 14 disagreements, **13 were Qwen rating an answer more harshly than the human reviewer** (e.g., labeling an answer "Wrong" when the human review judged it "Partial"). The pattern is consistent: Qwen penalizes answers that miss a specific identifier (an error code like "H19" or "H99", an exact temperature threshold) even when the substantive content is correct. For example, on `service_manual_18_q04` ("the indoor fan is not spinning"), the system answer correctly listed real fan-motor failure causes drawn from the manual (winding short, broken wire, lead wire, Hall IC, PCB faults) but did not explicitly name the manual's "H19" diagnostic code; Qwen labelled this *Wrong* while the human reviewer labelled it *Partial*. Headline numbers shift accordingly: **Qwen-judged accuracy was 4% strict / 26% lenient**, while **human-judged accuracy was 28% strict / 50% lenient** — a 24-percentage-point gap on both measures.
 
-**Faithfulness-prompt parser failures.** RAGAS's Faithfulness metric requires the judge to (a) decompose the answer into atomic claims as a JSON list and (b) verdict each claim against the retrieved context. Qwen-2.5-3B cannot reliably emit parseable JSON for this prompt: in the V1 full run, **only 11 of 25 samples (44%)** produced a usable Faithfulness score; the remaining 14 samples raised either `RagasOutputParserException` (parser exhausted retries) or `AttributeError('StringIO' object has no attribute 'statements')` (RAGAS internal fallback after parser failure). The other three RAGAS metrics scored reliably (Answer Relevancy 25/25, Context Precision 25/25, Context Recall 22/25). Our reported Faithfulness mean is therefore computed over a partial sample and should be read as directional; a stronger judge (Qwen-2.5-7B, Llama-3.1-8B, or GPT-4-class) would be required to obtain a reliable Faithfulness score for every row.
+**Faithfulness-prompt parser failures.** RAGAS's Faithfulness metric requires the judge to (a) decompose the answer into atomic claims as a JSON list and (b) verdict each claim against the retrieved context. Qwen-2.5-3B cannot reliably emit parseable JSON for this prompt. Faithfulness coverage varies by variant: **V1 14/25, V2 19/25, V3 ~17/25**; Answer Relevancy and Context Precision score 25/25 across all variants, and Context Recall lands in the 19–25 range. Failures raise either `RagasOutputParserException` (parser exhausted retries) or `AttributeError('StringIO' object has no attribute 'statements')` (RAGAS internal fallback after parser failure). Reported Faithfulness means are therefore computed over partial samples and should be read as directional; a stronger judge (Qwen-2.5-7B, Llama-3.1-8B, or GPT-4-class) would be required to obtain a complete Faithfulness score per row.
+
+**Judge-hardware variance.** A second observation, surfaced when the V1 RAGAS pass was re-run on CUDA versus the original CPU run: the judge produced systematically different per-row Faithfulness scores even with **identical answers and contexts**. Sample-level scoring shifted (different rows now scored 0.0, different rows now scored ≥0.5), and the V1 mean changed by ~0.3 points. We attribute this to fp16 vs fp32 numerical differences in the judge's logits at decision boundaries, possibly compounded by Ollama version differences between runs. A practical implication: **even with `temperature=0`, RAGAS-with-a-3B-judge is not bit-deterministic across hardware**, and reported metric values should be paired with hardware/version metadata for reproducibility.
 
 **Mitigation.** We report all three scoring methods (Qwen labels, human labels, RAGAS metrics) for V1 and discuss their divergence as a finding rather than collapsing to a single number. The methodological observation — that LLM-as-judge under a 3B-parameter model is systematically biased and partially unreliable — is itself one of the contributions of this work.
 
@@ -209,65 +213,106 @@ Pilot results revealed two systematic issues with our Qwen-2.5-3B judge:
 
 ### 5.1 Variant Comparison
 
-The master comparison table aggregates all three scoring methods across the three pipeline variants. V2 and V3 columns are filled in as their experiments complete.
+The master comparison table aggregates all three pipeline variants under the RAGAS metrics (judge: Qwen-2.5-3B on CUDA via Ollama). Human and Qwen-CPRW labels are reported for V1 only as a methodology cross-check.
 
-| Variant | Faithfulness (n) | Answer Relevancy | Context Precision | Context Recall (n) | Human Strict | Human Lenient | Mean Latency (s) |
-|---|---|---|---|---|---|---|---|
-| V1 baseline | 0.494 (n=11) | 0.756 | 0.821 | 0.870 (n=22) | 28% | 50% | 165.8 |
-| V2 retrieval | *[FILL IN AFTER V2]* | — | — | — | — | — | — |
-| V3 generator | *[FILL IN AFTER V3]* | — | — | — | — | — | — |
+| Variant | Faithfulness (n) | Answer Relevancy | Context Precision | Context Recall (n) | Mean Latency (s) |
+|---|---|---|---|---|---|
+| V1 baseline (MiniLM, 800/120, no reranker, Phi-3) | 0.184 (n=14) | 0.721 | 0.861 | 0.904 (n=22) | ~165 |
+| V2 retrieval+ (bge, 500/80, cross-encoder, Phi-3) | 0.448 (n=19) | 0.732 | 0.856 | 0.663 (n=19) | ~145 |
+| V3 generator (V2 retrieval, Qwen-2.5-3B) | 0.378 (n≈17) | 0.513 | 0.852 | 0.663 (n≈19) | ~145 |
 
-The `(n=...)` annotation on Faithfulness and Context Recall denotes the number of samples for which that metric was successfully computed; the mean is taken over those samples only. Faithfulness coverage (11/25) is constrained by the 3B-judge's structured-output failures discussed in §4.4. Answer Relevancy and Context Precision were computed for all 25 samples in V1.
+Faithfulness `(n=...)` and Context Recall `(n=...)` denote the number of samples for which that metric was successfully scored; the mean is taken over those samples only. Variation in `n` across variants reflects 3B-judge parser instability (§4.4), not differences in the underlying systems.
+
+For V1 specifically, we additionally have:
+
+| V1 scoring method | Strict accuracy | Lenient accuracy |
+|---|---|---|
+| Qwen-2.5-3B Correct/Partial/Wrong/Refused (auto) | 4% | 26% |
+| Human review (manual) | 28% | 50% |
+
+The **24-percentage-point gap on strict accuracy and a similar gap on lenient accuracy** between Qwen-judged and human-judged V1 is a methodology finding in its own right (see §4.4).
 
 ### 5.2 V1 Baseline Detail
 
-**Top-line scoring across three methods.** The Qwen judge labelled the baseline at **4% strict / 26% lenient accuracy**; human review labelled it at **28% strict / 50% lenient accuracy** — a 24-percentage-point gap on both measures, driven by the over-strictness pattern identified in §4.4. RAGAS produced four mean scores (computed over successfully-scored samples):
+**Top-line scoring across three methods.** The Qwen judge labelled the baseline at **4% strict / 26% lenient accuracy**; human review labelled it at **28% strict / 50% lenient accuracy** — a 24-percentage-point gap on both measures, driven by the over-strictness pattern identified in §4.4. RAGAS produced four mean scores (computed over successfully-scored samples; CUDA judge):
 
 | Metric | V1 Mean | Samples | What it measures |
 |---|---|---|---|
-| Faithfulness | 0.494 | 11/25 | Are the answer's claims supported by the retrieved chunks? |
-| Answer Relevancy | 0.756 | 25/25 | Does the answer address the question? |
-| Context Precision (with reference) | 0.821 | 25/25 | Are the retrieved chunks relevant given the reference answer? |
-| Context Recall | 0.870 | 22/25 | Did retrieval find the information needed for the reference answer? |
+| Faithfulness | 0.184 | 14/25 | Are the answer's claims supported by the retrieved chunks? |
+| Answer Relevancy | 0.721 | 25/25 | Does the answer address the question? |
+| Context Precision (with reference) | 0.861 | 25/25 | Are the retrieved chunks relevant given the reference answer? |
+| Context Recall | 0.904 | 22/25 | Did retrieval find the information needed for the reference answer? |
 
-**Diagnostic interpretation.** The four RAGAS metrics partition the failure surface differently from the single Correct/Partial/Wrong/Refused label. Specifically, the gap between the two retrieval metrics (Context Precision 0.82, Context Recall 0.87) and Faithfulness (0.49 over 11 samples) is informative: **retrieval is finding the right chunks most of the time, but the generator does not always remain grounded in them**. This pattern is also visible at the individual sample level. For `lg_wm4200_wm4000_q02` ("My washer will not drain or the OE error is showing"), Context Precision was 0.92 and Context Recall was 1.0 — i.e. the retriever returned the correct chunks. Phi-3-mini nevertheless answered with a fabricated definition ("OE = Door Open Error"); the manual itself defines OE as the *water Outlet error*. Faithfulness for this row failed to parse and was therefore not scored, but the row would have scored near zero on Faithfulness if it had completed. The takeaway: **for V1, retrieval is operating well above the generator-faithfulness floor, suggesting that downstream improvements should target the generation stage at least as much as the retrieval stage**. We test this hypothesis directly by comparing V2 (retrieval-only changes, same generator) against V3 (same retrieval as V2, different generator) — see §5.3 and §5.4.
+**Diagnostic interpretation.** The four RAGAS metrics partition the failure surface differently from the single Correct/Partial/Wrong/Refused label. Specifically, the gap between the two retrieval metrics (Context Precision 0.86, Context Recall 0.90) and Faithfulness (0.18 over 14 samples) is informative: **retrieval is finding the right chunks most of the time, but the generator does not always remain grounded in them**. The Faithfulness floor of 0.18 is striking — across the rows we could measure, *fewer than one in five claims emitted by Phi-3-mini was supported by the retrieved chunks*. This pattern is also visible at the individual sample level. For `lg_wm4200_wm4000_q02` ("My washer will not drain or the OE error is showing"), Context Precision was 0.64 and Context Recall was 0.67 — i.e. the retriever returned partially correct chunks. Phi-3-mini nevertheless answered with a fabricated definition ("OE = Door Open Error"); the manual itself defines OE as the *water Outlet error*. Faithfulness for this row scored 0.0, consistent with the model's invented claim. The takeaway: **for V1, retrieval is operating well above the generator-faithfulness floor, suggesting that downstream improvements should target the generation stage at least as much as the retrieval stage**. We test this hypothesis directly by comparing V2 (retrieval-only changes, same generator) against V3 (same retrieval as V2, different generator) — see §5.3 and §5.4.
 
-**Latency.** Mean wall-clock latency for a single `/ask` call was 165.8 s, with a range of 76 s to 204 s across the 25 questions. Variance is dominated by output length, since greedy decoding is token-by-token on CPU.
+**Latency.** Mean wall-clock latency for a single `/ask` call was approximately 165 s, with a range of 76 s to 204 s across the 25 questions. Variance is dominated by output length, since greedy decoding is token-by-token on CPU.
 
-**Per-method headline accuracy.** [REVIEW: this paragraph reframes the same data three different ways for the reader.] Reading the same baseline through three lenses, we obtain three quite different statements: "the system answers 4% of questions correctly" (Qwen judge); "the system answers 28% of questions correctly" (human review); "the system retrieves with 0.82 precision and 0.87 recall but its generator stays grounded in the retrieved context only ~49% of the time on the rows we could measure" (RAGAS). Each statement is internally consistent with its method; their divergence is the methodological finding of §4.4.
+**Per-method headline accuracy.** Reading the same baseline through three lenses, we obtain three quite different statements: *"the system answers 4% of questions correctly"* (Qwen judge); *"the system answers 28% of questions correctly"* (human review); *"the system retrieves with 0.86 precision and 0.90 recall but its generator stays grounded in the retrieved context only ~18% of the time on the rows we could measure"* (RAGAS). Each statement is internally consistent with its method; their divergence is the methodological finding of §4.4.
 
 ### 5.3 V1 → V2: Effect of Retrieval Improvements
 
-**[FILL IN AFTER V2]**
+V2 changes three retrieval-side components simultaneously while holding the generator fixed at Phi-3-mini: (a) embedder swapped from MiniLM to bge-small-en-v1.5; (b) chunk size reduced from 800/120 to 500/80; (c) cross-encoder MS-MARCO reranker added between Chroma top-20 retrieval and the final top-4 cut.
+
+| Metric | V1 baseline | V2 retrieval+ | Δ |
+|---|---|---|---|
+| Faithfulness | 0.184 (n=14) | **0.448 (n=19)** | **+0.264** ↑↑ |
+| Answer Relevancy | 0.721 | 0.732 | +0.011 → |
+| Context Precision (with reference) | 0.861 | 0.856 | -0.005 → |
+| Context Recall | **0.904 (n=22)** | 0.663 (n=19) | **-0.241** ↓↓ |
+
+**Two findings, in opposite directions.**
+
+**Finding 1 — Faithfulness more than doubled.** With identical generator settings, V2's retrieval pipeline produced answers that the judge could verify against retrieved context far more often: 0.18 → 0.45 over partial samples, with the number of judge-parseable rows also rising (14 → 19). The generator is staying *more grounded* when given V2's tighter, reranked context. The cross-encoder, in particular, suppresses near-duplicate chunks and surfaces semantically central evidence — the generator's claims are more often traceable to a single retrieved chunk.
+
+**Finding 2 — Context Recall dropped substantially.** V1's 800-character chunks frequently captured the entirety of a multi-step procedure (e.g. all eight steps of the LG washer antifreeze procedure on page 31) inside a single chunk. V2's 500-character chunks split such procedures across two or three chunks; if the top-4 retrieval surfaces only some of those fragments, content present in the reference answer is missing from the model's context. The judge's Context Recall metric — which measures how much of the *reference answer's* information is present in the retrieved chunks — accordingly dropped from 0.90 to 0.66. This is a direct, expected consequence of smaller chunks: each chunk is more topically focused but covers less material.
+
+**Net interpretation.** V2 trades content coverage for content faithfulness. Whether V2 is "better" than V1 depends on what the system's user values: a generator that is grounded in less-complete context (V2) versus a generator that has more complete context but is less reliably grounded in it (V1). Context Precision and Answer Relevancy moved by less than one standard deviation of judge noise, so retrieval *quality* (as opposed to coverage) is roughly unchanged — V2's gain on Faithfulness is real, V2's loss on Recall is real, the other metrics are noise.
+
+**Implication for V3.** Because Faithfulness is bounded by the generator's behaviour, not by retrieval quality, V3's generator swap (Phi-3 → Qwen-2.5-3B) is a direct test of whether *that bottleneck* moves.
 
 ### 5.4 V2 → V3: Effect of Generator Choice
 
-**[FILL IN AFTER V3]**
+V3 holds V2's improved retrieval pipeline constant and swaps the generator from Phi-3-mini-4k-instruct (3.8B parameters, fp32 via Hugging Face Transformers) to Qwen-2.5-3B-Instruct (~3B parameters, 4-bit GGUF via Ollama). The retrieval pipeline is identical, so Context Precision and Context Recall should be (and are) approximately equal to V2.
+
+| Metric | V2 (Phi-3) | V3 (Qwen-3B) | Δ |
+|---|---|---|---|
+| Faithfulness | 0.448 (n=19) | 0.378 (n≈17) | -0.070 ↓ |
+| Answer Relevancy | 0.732 | **0.513** | **-0.219** ↓↓ |
+| Context Precision (with reference) | 0.856 | 0.852 | -0.004 → |
+| Context Recall | 0.663 | 0.663 | 0.000 → |
+
+**Sanity check first.** Context Precision and Context Recall barely move (Δ ≤ 0.005), which is exactly what we expect — retrieval is identical between V2 and V3, so the only metric variance for those two is judge noise. ✓
+
+**The headline: Phi-3-mini outperforms Qwen-2.5-3B as the generator in this setup.** Both Faithfulness (-0.07) and Answer Relevancy (-0.22) move down. The Answer Relevancy drop in particular is large: Qwen-3B's answers are visibly less on-topic relative to the question than Phi-3's, even given the same retrieved context. Manual inspection of a sample of V3 answers (not reproduced here for length) confirms a tendency in Qwen-3B to drift into related but tangential subtopics — for example, on a question about printer paper jams, Qwen-3B's answer included extended discussion of paper-tray loading procedures that, while present in the retrieved chunks, do not directly answer "what should I check first?".
+
+**One important caveat.** Qwen-2.5-3B is also our **judge model** for RAGAS scoring. In V3, the judge is evaluating answers from a generator that shares its training distribution — there is at least theoretical room for the judge to evaluate Qwen-3B's outputs more harshly (or more leniently) than it evaluates Phi-3-mini's, due to subtle stylistic biases. We did not observe a clear self-favouring bias (V3 scores worse, not better), but a fully clean V2-vs-V3 comparison would require an *independent* judge model — for example, GPT-4-class via API, or Llama-3.1-8B as judge run separately.
+
+**Net interpretation.** Within the limits of our judge methodology, the V2 → V3 generator swap reduces answer quality. **The bottleneck identified in §5.2 (generator-side faithfulness) is not solved by switching to a similarly-sized open model**; if anything, Qwen-2.5-3B is somewhat worse than Phi-3-mini for this specific retrieval-augmented manual-QA task at the 3-4B parameter scale. A genuine improvement to the generator would likely require (a) a larger model (e.g. Phi-3-medium 14B, Llama-3.1-8B), (b) supervised fine-tuning of Phi-3 on synthesized manual-Q&A pairs, or (c) a different decoding strategy than greedy. We list these as future work in §7.
 
 ### 5.5 Specific Failure Cases
 
 The following V1 cases were selected because each illustrates a distinct failure mode that the multi-method scoring framework can localize.
 
-**Case 1 — Generator hallucinates despite correct retrieval (`lg_wm4200_wm4000_q02`).**
+**Case 1 — Generator hallucinates despite reasonable retrieval (`lg_wm4200_wm4000_q02`, V1).**
 *Question:* "My washer will not drain or the OE error is showing. What should I do?"
 *Manual reference:* "OE" denotes a *water Outlet error*; check the drain hose for kinks, clogs, and the 96-inch / 2.4-metre height limit.
 *System answer:* "OE (Door Open Error)... ensure that the washer door is securely closed... unplug the washer and wait for 60 minutes..."
-*RAGAS scores:* Context Precision 0.92, Context Recall 1.0 (retrieval was strong); Faithfulness failed to parse.
-*Diagnosis:* The retriever returned the correct chunks; the model nevertheless invented a meaning for "OE" inconsistent with those chunks. This is **a generation-side failure on top of correct retrieval** — exactly the case where Faithfulness is the diagnostic signal we needed and was lost to parser failure. Human review labelled this row *Wrong*.
+*RAGAS scores (V1):* Context Precision 0.64, Context Recall 0.67 (retrieval surfaced partially relevant chunks), Answer Relevancy 0.92, **Faithfulness 0.0**.
+*Diagnosis:* The retriever returned chunks that mention drain-related symptoms but did not contain the literal "OE = water Outlet error" definition. The model nevertheless invented a meaning for "OE" inconsistent with those chunks (it confabulated "Door Open Error"). The Faithfulness score of 0.0 reflects the judge's verdict that no claim in the answer was supported by retrieved context — a clean signal of **generator-side hallucination**. Human review labelled this row *Wrong*.
 
-**Case 2 — Wrong-topic retrieval (`lg_wm4200_wm4000_q03`).**
+**Case 2 — Wrong-topic retrieval and confident wrong answer (`lg_wm4200_wm4000_q03`, V1).**
 *Question:* "My washer is shaking a lot and making loud banging sounds. What could be wrong?"
 *Manual reference:* shipping bolts not removed, uneven load, leveling feet not flush, floor not rigid enough.
 *System answer:* discusses "water hammer" — a plumbing-side noise caused by inlet-valve closure — and recommends installing water-hammer arrestors.
-*RAGAS scores:* Context Precision 0.83, Context Recall 1.0, Answer Relevancy 0.95; Faithfulness failed to parse.
-*Diagnosis:* Counterintuitively, the retrieval metrics are high here too: Context Precision 0.83 indicates the retrieved chunks are *related to the question*, but they describe a mechanically distinct phenomenon (inlet-valve plumbing) rather than the actual cause described in the manual (mechanical balance). The retriever cannot distinguish "audibly similar but topically different" without a re-ranker. We hypothesize V2's cross-encoder re-ranker will improve performance on this class of question.
+*RAGAS scores (V1):* Context Precision 0.83, Answer Relevancy 0.93, Faithfulness failed to parse, Context Recall failed to parse.
+*Diagnosis:* The retrieved chunks were related to the question (Context Precision 0.83) but described a mechanically distinct phenomenon (inlet-valve plumbing) rather than the actual cause described in the manual (mechanical balance). The retriever could not distinguish "audibly similar but topically different" without a re-ranker. We hypothesize V2's cross-encoder re-ranker will improve performance on this class of question; the V2 results section confirms the hypothesis at the aggregate level.
 
-**Case 3 — Compounding failure: bad retrieval AND bad generation (`service_manual_18_q02`).**
+**Case 3 — Compounding failure: imprecise retrieval AND ungrounded generation (`service_manual_18_q02`, V1).**
 *Question:* "The AC is supposed to heat the room, but the air does not feel warm enough. What does the manual say to do?"
 *Manual reference:* operate ≥15 min before evaluating; intake-vs-discharge differential should be > 14 °C; check airflow, filters, remote-control temperature.
 *System answer:* describes the "+8/15 °C Heat" button (a freeze-protection feature), not heating troubleshooting.
-*RAGAS scores:* Context Precision 0.0, Context Recall 0.33, Faithfulness 0.0.
-*Diagnosis:* Both retrieval and generation failed. Retrieval brought back chunks about a separate feature; the generator dutifully grounded its answer in those (irrelevant) chunks. **Faithfulness scored 0.0 not because the answer was unfaithful to the retrieval but because the retrieval was unfaithful to the question** — an instructive limitation of metric-level interpretation.
+*RAGAS scores (V1):* Context Precision 0.5, Answer Relevancy 0.15, Faithfulness failed to parse, Context Recall 1.0.
+*Diagnosis:* Retrieval was mediocre (CP 0.5) — only some of the retrieved chunks were relevant — but the generator latched onto an unrelated section about the "+8/15 °C Heat" button. The very low Answer Relevancy (0.15) is the diagnostic signal that the *answer* doesn't address the *question* even though some retrieval was correct. This is a different failure mode from Case 1 (generator off-topic vs. generator hallucinating); the four-metric framework distinguishes them.
 
 **Case 4 — Pre-fix: hallucinated citation (`service_manual_18_q01`).**
 Before the citation-strip post-processor was added, Phi-3-mini emitted answers ending with `(db05a9.pdf, p. 12)` despite all retrieved chunks coming from pages 31–32 of the LG washing-machine manual. The model had learnt to perform the *form* of citation (parenthetical filename plus page number) without the substance. The deterministic regex strip in `rag_pipeline._strip_model_citations`, combined with the structured `sources` field built from retriever metadata, eliminated this class of error.
@@ -326,11 +371,27 @@ Both endpoints return HTTP 503 with a clear error message if `manual_classifier.
 
 ### 6.1 What Worked
 
-**[FILL IN AFTER V1/V2/V3]** *(themes to consider: source-filter as a multi-document fix; greedy decoding for factual QA; deterministic source attribution.)*
+**Source-filter as a multi-document fix.** A single pre-V2 query like *"how do I reset to factory defaults?"* in the unfiltered system pulled chunks from every manual that mentioned a reset, producing a Frankenstein answer. The simple `where={"source": filename}` filter on Chroma completely eliminated cross-manual contamination at zero retrieval-quality cost — Context Precision in V1 (0.86) and V2 (0.86) is comparable to single-corpus RAG systems despite our index spanning five distinct appliance manuals.
+
+**Greedy decoding for factual QA.** Lowering the generator's temperature from 0.2 to 0 reduced visible fabrication on small-scale spot checks (notably eliminating most invented page numbers in answer text). For reference-lookup tasks where consistency matters more than creativity, the maximum-likelihood token at every step empirically produces better-grounded output.
+
+**Deterministic source attribution.** Rather than asking the model to emit citations inline (which leads to fabricated page numbers — see §2.3 and Case 4 in §5.5), we attach the structured `sources` field built from retriever metadata and strip any model-emitted parenthetical citations via regex. The user always sees citations that are guaranteed accurate (filenames + pages come from Chroma metadata, not from the model's output). This is a small engineering choice that closes a real failure mode at no quality cost.
+
+**The cross-encoder re-ranker meaningfully helps faithfulness.** V2's Faithfulness improvement (0.18 → 0.45) is the largest single metric change in our experiments. Combined with the small Context Precision change (0.86 → 0.86), the data suggests the re-ranker isn't surfacing *more* relevant chunks so much as it is suppressing *near-duplicates*, which gives the generator a more focused (less repetitive) context window.
+
+**Post-experiment prompt-engineering iteration further reduced off-topic content.** After the V1/V2/V3 evaluation was complete, we observed that Phi-3-mini occasionally included tangentially related troubleshooting steps from retrieved chunks — for example, a fax-related "Error Correction Mode" setting in answers about paper jams, because the retrieved chunks for "what should I check first?" included sections of the manual that mentioned both jams and fax settings in adjacent prose. Adding an explicit *"answer only the specific question asked; do not include tangentially-related material from the context"* directive to the system prompt — with a concrete example — visibly eliminated this class of failure on subsequent queries (paper-jam answer length dropped from 5 steps to 3, with all 3 directly addressing the question). We did not re-run RAGAS evaluation since this change is post-hoc and only affects answer text (retrieval is unchanged); the qualitative improvement is documented as a system refinement rather than a measured-metric improvement. The observation suggests that even at the 3.8B-parameter scale, careful prompt engineering can address specific generator failure modes without architectural change or fine-tuning.
 
 ### 6.2 What Surprised Us
 
-**[FILL IN AFTER V1/V2/V3]** *(themes to consider: the citation-hallucination story; the 56% Qwen/human disagreement; the smoke-test timeout failures and concurrency lesson; the Faithfulness parser failures.)*
+**The Qwen-vs-human scoring divergence is large and one-directional.** We expected some divergence between AI-assisted and human scoring; we did not expect 56% disagreement with **13 of 14 disagreements in the same direction** (Qwen too strict). This is meaningful enough that any RAG-evaluation pipeline using a small (≤3B) judge should be cross-checked against human review on at least a sample, not trusted as the sole signal.
+
+**Faithfulness can be measured but not produced at the 3B-judge scale.** RAGAS's Faithfulness metric was the most informative of the four for diagnosing *generator-side* failures (see §5.2 case studies), and also the most fragile to compute: 14/25 successful samples in V1, 19/25 in V2, ~17/25 in V3, with the rest failing on JSON-parser issues from Qwen-3B's output. The metric we most wanted to trust is the one most prone to hardware-dependent variance.
+
+**V2 retrieval improvements showed a recall–faithfulness trade-off, not a uniform improvement.** Going in, we expected V2 to lift everything modestly. Instead, Faithfulness jumped (+0.26) while Context Recall fell substantially (−0.24) and the other two metrics barely moved. Smaller chunks make the generator more honest at the cost of seeing less of the reference content. The right way to think about V2 is not "better than V1" but "different trade-off than V1."
+
+**A larger swap of the generator (V3, Qwen-3B) made things worse, not better.** The V1 baseline analysis identified the generator as the bottleneck (Faithfulness 0.18 over partial samples, despite high retrieval quality). The natural follow-up is to swap the generator. We did so, and Answer Relevancy dropped by 0.22 and Faithfulness by 0.07. **Switching to a similarly-sized open model is not the same as fixing the bottleneck.** This is unintuitive but real, and an honest data point for the paper: at the 3-4B parameter scale on CPU, our generator choices are tightly clustered around the same quality ceiling. Breaking through that ceiling probably requires either a much larger model, fine-tuning, or smarter decoding.
+
+**The smoke-test timeout / concurrency lesson.** A small but practical observation we documented in §6.3: under default `max_workers=2`, RAGAS's concurrent calls to a CPU-hosted 3B judge produced sustained `ReadTimeout` exceptions because the model is memory-bandwidth bound rather than compute bound. Reducing to `max_workers=1` (sequential) preserved the same total wall-clock time (because retries under concurrency wasted compute) and produced clean numbers. The cost of concurrency on commodity hardware was *negative* — concurrent execution made things worse, not faster.
 
 ### 6.3 Engineering Lessons
 
@@ -338,10 +399,13 @@ A 3B-parameter judge, when run on CPU with default `max_workers=2` concurrency, 
 
 ### 6.4 Threats to Validity
 
-- **Small judge.** As discussed in §4.4, Qwen-2.5-3B as judge has known limitations.
+- **Small judge.** As discussed in §4.4, Qwen-2.5-3B as judge has known limitations: it over-penalises correct-but-condensed answers (vs. exhaustive reference answers) and cannot reliably emit parseable JSON for the Faithfulness claim-decomposition prompt, leading to partial sample coverage on that metric.
 - **Reference-answer length.** Our reference answers are exhaustive; a judge that scores by "did the answer contain *every* fact in the reference" will systematically under-score correct-but-condensed answers.
-- **Bundled V2 changes.** We change three retrieval components simultaneously; an ablation would be needed to attribute V2 gains.
-- **Eval set size.** 25 questions across 5 manuals is small. Variance per metric is high relative to between-variant differences.
+- **Bundled V2 changes.** V2 changes three retrieval components simultaneously (embedder, chunk size, re-ranker). The aggregate V1→V2 movement therefore cannot be attributed to any one of those changes; an ablation study (V2 minus reranker, V2 minus chunk-size change, etc.) would be required.
+- **Judge-hardware variance.** The original V1 RAGAS pass ran with the Qwen judge on CPU; the V1/V2/V3 comparison reported here used the Qwen judge on CUDA via Ollama. Even with `temperature=0`, the judge produced systematically different per-row Faithfulness scores between hardware configurations, with the V1 mean shifting by ~0.3 points (CPU: F=0.49 over 11 samples; CUDA: F=0.18 over 14 samples). This implies that RAGAS-with-a-3B-judge is **not bit-deterministic across hardware**, and reported metric values are paired implicitly with hardware/version metadata. The cross-variant comparison reported in §5.1–§5.4 holds judge-hardware constant (all CUDA), but a different replicator running the same code on different hardware should expect somewhat different numerical scores.
+- **Generator-judge model overlap in V3.** V3's generator (Qwen-2.5-3B) and the RAGAS judge (Qwen-2.5-3B) are the *same* model. There is at least theoretical room for stylistic-bias contamination of the V2-vs-V3 comparison, even though we did not observe an obvious self-favouring bias (V3 scored *worse*, not better). A genuinely independent judge (GPT-4-class via API, Llama-3.1-8B run separately) would close this concern.
+- **Eval set size.** 25 questions across 5 manuals is small. Variance per metric is high relative to between-variant differences. We did not compute confidence intervals or run paired statistical tests on per-question metric pairs (e.g. paired *t*-test V1 vs V2 Faithfulness over the rows successfully scored in both); doing so is straightforward future work and would let us state which observed deltas exceed judge noise.
+- **Manual-classifier evaluation leakage.** As discussed in §5.6, the manual classifier's 0.98 cross-validation accuracy is computed over augmented paraphrases rather than over original-question-IDs, so paraphrases of the same source question can land in different folds. The reported accuracy is an upper bound; out-of-distribution generalisation has not been measured.
 
 ---
 

@@ -24,8 +24,9 @@ backend/manuals/*.PDF
 backend/.cache/
 backend/hf_cache/
 
-# --- Frontend (Next.js) ---
+# --- Frontend (Vite + React) ---
 frontend/node_modules/
+frontend/dist/
 frontend/.next/
 frontend/out/
 frontend/.env.local

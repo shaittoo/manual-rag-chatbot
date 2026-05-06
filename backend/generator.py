@@ -68,6 +68,15 @@ SYSTEM_PROMPT = (
     "Answer the user's question using ONLY the provided context. "
     "If the context does not contain the answer, say you don't know — do not invent steps, "
     "part numbers, or model details. "
+    "\n\n"
+    "IMPORTANT — relevance discipline: "
+    "Answer ONLY the specific question asked. Be precise about the user's actual problem. "
+    "Even if the retrieved context contains additional troubleshooting steps, settings, or features "
+    "that are mentioned alongside the relevant material, do NOT include them in your answer "
+    "unless they directly address the user's question. For example, if the user asks about a "
+    "paper jam, do not include fax-related settings even if they appear in the context. "
+    "Prefer a shorter focused answer over a longer comprehensive one. "
+    "\n\n"
     "Do NOT include filenames, page numbers, or parenthetical citations in your answer — "
     "the system appends sources automatically. Just write a clean, direct answer."
 )
@@ -102,8 +111,10 @@ def _build_messages(question: str, chunks: List[RetrievedChunk]) -> list[dict[st
     user_content = (
         f"Context:\n{context}\n\n"
         f"Question: {question}\n\n"
-        "Answer concisely in plain prose. Do not include filenames, page numbers, "
-        "or parenthetical citations — those are added by the system."
+        "Answer concisely in plain prose. Address ONLY the specific question asked. "
+        "If a step or fact in the context does not directly answer this question, omit it. "
+        "Do not include filenames, page numbers, or parenthetical citations — those are "
+        "added by the system."
     )
 
     return [
