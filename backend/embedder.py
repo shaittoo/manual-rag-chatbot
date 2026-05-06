@@ -13,6 +13,7 @@ Why a wrapper?
 from __future__ import annotations
 
 from functools import lru_cache
+import torch
 from typing import List
 
 from sentence_transformers import SentenceTransformer
@@ -27,8 +28,9 @@ DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 @lru_cache(maxsize=1)
 def _get_model(model_name: str = DEFAULT_MODEL) -> SentenceTransformer:
-    """Cache the model in memory so we only pay the load cost once per process."""
-    return SentenceTransformer(model_name)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Embedder running on: {device}", flush=True)
+    return SentenceTransformer(model_name, device=device)
 
 
 def embed_texts(texts: List[str], model_name: str = DEFAULT_MODEL) -> List[List[float]]:

@@ -34,6 +34,8 @@ from __future__ import annotations
 import csv
 import json
 import time
+import platform
+import subprocess
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -61,7 +63,7 @@ TOP_K = 4
 
 # Timeout per question, in seconds.
 # Phi-3 can be slow on laptop GPUs/CPU, so keep this generous.
-REQUEST_TIMEOUT = 600
+REQUEST_TIMEOUT = 1200
 
 # Batch range.
 # Python slicing means:
@@ -76,12 +78,12 @@ REQUEST_TIMEOUT = 600
 #   20, 25  -> questions 21 to 25
 #   0, 25   -> ALL 25 questions in one shot (set APPEND_RESULTS=False to overwrite)
 START_INDEX = 0
-END_INDEX = 25
+END_INDEX = 5
 
 # If True, append to existing results.csv.
 # Set to False when doing a fresh full run for a new variant (V2, V3, etc.)
 # so the old results aren't mixed with the new ones.
-APPEND_RESULTS = False
+APPEND_RESULTS = True
 
 
 # ---------------------------------------------------------------------
@@ -242,10 +244,66 @@ def print_debug(row: dict[str, Any], batch_pos: int, batch_total: int) -> None:
 
 
 # ---------------------------------------------------------------------
+# RUNTIME / DEVICE INFO
+# ---------------------------------------------------------------------
+
+def get_runtime_device_info() -> str:
+    """
+    Best-effort device detection for the evaluation environment.
+
+    Note:
+    This detects what Python/PyTorch can see on the machine running run_eval.py.
+    The actual model execution happens inside the FastAPI server process, so this
+    should match as long as the server is running in the same environment.
+    """
+    device_lines = []
+
+    device_lines.append(f"Python platform: {platform.platform()}")
+    device_lines.append(f"Processor: {platform.processor() or 'Unknown'}")
+
+    try:
+        import torch
+
+        device_lines.append(f"PyTorch version: {torch.__version__}")
+
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            device_lines.append("Detected device: GPU")
+            device_lines.append(f"CUDA available: yes")
+            device_lines.append(f"GPU: {gpu_name}")
+            device_lines.append(f"CUDA version: {torch.version.cuda}")
+        else:
+            device_lines.append("Detected device: CPU")
+            device_lines.append("CUDA available: no")
+
+    except ImportError:
+        device_lines.append("PyTorch not installed in this environment.")
+        device_lines.append("Detected device: CPU/unknown")
+
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+
+        if result.returncode == 0 and result.stdout.strip():
+            gpu_names = result.stdout.strip().splitlines()
+            device_lines.append(f"nvidia-smi GPU(s): {', '.join(gpu_names)}")
+
+    except Exception:
+        pass
+
+    return "\n".join(device_lines)
+
+# ---------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------
 
 def main() -> None:
+    full_run_start = time.perf_counter()
+
     all_questions = load_questions(QUESTIONS_PATH)
     total_questions = len(all_questions)
 
@@ -321,8 +379,19 @@ def main() -> None:
 
             print_debug(row, batch_pos=batch_pos, batch_total=batch_total)
 
+    full_run_seconds = time.perf_counter() - full_run_start
+    full_run_minutes = full_run_seconds / 60
+
     print()
+    print("=" * 80)
+    print("FULL RUN SUMMARY")
+    print("=" * 80)
     print(f"Done. Wrote/appended {batch_total} rows to {RESULTS_PATH}")
+    print(f"Total runtime: {full_run_seconds:.2f} seconds")
+    print(f"Total runtime: {full_run_minutes:.2f} minutes")
+    print()
+    print("Runtime device info:")
+    print(get_runtime_device_info())
 
 
 if __name__ == "__main__":
