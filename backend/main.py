@@ -3,10 +3,12 @@ main.py
 -------
 FastAPI entrypoint. Endpoints:
 
-    GET  /health           -> liveness check
-    GET  /sources          -> list filenames currently in the index
-    POST /ingest           -> rebuild the Chroma index from backend/manuals/*.pdf
-    POST /ask  {query,...} -> RAG: retrieve + generate (optionally scoped to one source)
+    GET  /health             -> liveness check
+    GET  /sources            -> list filenames currently in the index
+    POST /ingest             -> rebuild the Chroma index from backend/manuals/*.pdf
+    POST /ask {query,...}    -> RAG: retrieve + generate (optionally scoped to a source)
+    POST /classify {query}   -> predict which manual a query is about (no generation)
+    POST /ask_auto {query}   -> classify -> ask: auto-routes the query to the predicted manual
 
 Run locally:
     cd manu/backend
@@ -68,6 +70,23 @@ class SourcesResponse(BaseModel):
     sources: list[str]
 
 
+class ClassifyRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="The user's question.")
+
+
+class ClassifyResponse(BaseModel):
+    predicted_source: str
+    confidence: float
+    distribution: list[dict]
+
+
+class AskAutoResponse(BaseModel):
+    answer: str
+    sources: list[dict]
+    routed_to: str
+    routing_confidence: float
+
+
 # --- Routes --------------------------------------------------------------
 
 @app.get("/health")
@@ -102,3 +121,53 @@ def sources_endpoint() -> SourcesResponse:
 def ask_endpoint(req: AskRequest) -> AskResponse:
     result = ask_dict(req.query, top_k=req.top_k, source=req.source)
     return AskResponse(**result)
+
+
+# --- Manual classifier (auto-routing) ------------------------------------
+#
+# These two endpoints are gated by the trained weights existing on disk.
+# If `manual_classifier.pt` isn't present, both endpoints return 503 with a
+# helpful message rather than crashing — useful for partial deployments where
+# the classifier hasn't been trained yet (or has been deliberately disabled).
+
+def _load_classifier_or_fail():
+    """Lazy import + clean error if weights are missing."""
+    try:
+        from manual_classifier import predict_full  # noqa: WPS433
+        return predict_full
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Manual classifier not available: {e}. "
+                "Run `python train_classifier.py` first to produce the weights."
+            ),
+        )
+
+
+@app.post("/classify", response_model=ClassifyResponse)
+def classify_endpoint(req: ClassifyRequest) -> ClassifyResponse:
+    """
+    Predict which manual a query is about, without running RAG.
+    Useful for the frontend to display 'Routing to X (NN%)' before the answer.
+    """
+    predict_full = _load_classifier_or_fail()
+    result = predict_full(req.query)
+    return ClassifyResponse(**result)
+
+
+@app.post("/ask_auto", response_model=AskAutoResponse)
+def ask_auto_endpoint(req: ClassifyRequest) -> AskAutoResponse:
+    """
+    Classify -> ask. The user doesn't have to pick a manual; we predict it.
+    Returns the same shape as /ask plus the predicted source and its confidence.
+    """
+    predict_full = _load_classifier_or_fail()
+    routing = predict_full(req.query)
+    result = ask_dict(req.query, source=routing["predicted_source"])
+    return AskAutoResponse(
+        answer=result["answer"],
+        sources=result["sources"],
+        routed_to=routing["predicted_source"],
+        routing_confidence=routing["confidence"],
+    )

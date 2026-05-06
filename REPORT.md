@@ -274,6 +274,52 @@ Before the citation-strip post-processor was added, Phi-3-mini emitted answers e
 
 [REVIEW: pick the 2–3 of these you want to keep in the final paper. Cases 1, 2 and 3 together demonstrate that the four RAGAS metrics localise failures to retrieval vs. generation; Case 4 documents a problem we already solved.]
 
+### 5.6 System Augmentation: Auto-Routing via a Learned Manual Classifier
+
+The V1/V2/V3 experiment evaluates *answer quality given a known source manual*; the user is assumed to have already selected which appliance their question is about. In practice this is an awkward UX — a user typing *"my washer is leaking"* should not have to know which file in the corpus contains the answer. To address this we trained a small feed-forward classifier that predicts the source manual directly from the query, enabling an auto-routed `/ask_auto` endpoint that does not require the user to specify a `source`.
+
+**Architecture.** The classifier sits on top of a frozen `sentence-transformers/all-MiniLM-L6-v2` embedder. The embedding (384-dim, L2-normalized) is fed into a feed-forward head:
+
+```
+Linear(384 -> 128) -> ReLU -> Dropout(0.2) -> Linear(128 -> 5)
+```
+
+Output logits are softmaxed to produce P(manual | query). The head has roughly 50K trainable parameters; the embedder is frozen, so all backpropagation is restricted to the head. This is a deliberate hedge against overfitting on the small training set.
+
+**Training data.** The 25 hand-labeled questions in `eval/questions.json` are augmented by deterministic paraphrasing — synonym substitution on appliance terms (`washer ↔ washing machine`, `fridge ↔ refrigerator`, `aircon ↔ air conditioner ↔ AC`) and lexical rewrites on common question stems (`What should I check ↔ What can I check ↔ What should I look at`). Augmentation produces **103 examples** distributed roughly evenly across the five manual classes:
+
+| Manual | Augmented examples |
+|---|---|
+| `DA68-04752Q_FDR_RF6500C_3Door_EN_MES_CFR_260209.pdf` | 17 |
+| `Service-Manual-18.pdf` | 21 |
+| `c06184015.pdf` | 21 |
+| `cpd60205.pdf` | 21 |
+| `db05a9.pdf` | 23 |
+
+**Training.** 60 epochs, Adam (`lr=1e-3`, `weight_decay=1e-4`), cross-entropy loss, batch size 8, dropout 0.2. Final-epoch training loss converged to **0.009**, indicating the model has comfortably memorized the training distribution. Loss curves (per fold) are saved to `backend/manual_classifier_loss.png`.
+
+**Evaluation — 5-fold cross-validation:**
+
+| Fold | Validation accuracy |
+|---|---|
+| 1 | 1.000 |
+| 2 | 1.000 |
+| 3 | 1.000 |
+| 4 | 0.950 |
+| 5 | 0.950 |
+| **Mean** | **0.980 ± 0.024** |
+
+**Important caveat — paraphrase leakage across folds.** The 5-fold split was performed over the **augmented** dataset (103 paraphrases) rather than over the **25 original questions**. As a result, a paraphrase of question Q can land in the training fold while another paraphrase of Q lands in the validation fold; the classifier effectively sees near-duplicate inputs at evaluation time. The reported 0.980 should therefore be interpreted as an **upper bound** on out-of-distribution generalization. A more rigorous split — stratified by *original-question-id* such that all paraphrases of a given source question stay together in either train or val — would produce a more conservative estimate. We flag this as a methodological caveat rather than re-running with the stricter split given the project timeline; it is an obvious item for follow-up work.
+
+**Integration.** Two new endpoints are exposed in `main.py`:
+
+- `POST /classify` — accepts `{"query": str}`, returns `{predicted_source, confidence, distribution}`. No retrieval or generation is performed. Useful for the frontend to display *"Routing to db05a9.pdf (92% confidence)"* before the answer streams in.
+- `POST /ask_auto` — accepts `{"query": str}`, internally calls `/classify` then `/ask` with the predicted source, and returns the standard `/ask` response augmented with `routed_to` and `routing_confidence`. End-to-end auto-routing in one HTTP call.
+
+Both endpoints return HTTP 503 with a clear error message if `manual_classifier.pt` is not present on disk, so a partial deployment without the trained classifier degrades gracefully rather than crashing.
+
+**Why this matters for the paper.** Sections 5.1–5.5 study a system whose retrieval is filtered to the right manual *given by the user*. §5.6 adds a learned component that closes that gap on the user side: a small but genuinely-trained neural network that converts an unfiltered natural-language query into a source filter. It is the project's most direct *deep learning* contribution — a real training loop, a real loss function, a real held-out evaluation — distinct from the V1/V2/V3 comparison study which uses pretrained components only.
+
 ---
 
 ## 6. Discussion

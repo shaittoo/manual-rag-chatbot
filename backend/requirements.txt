@@ -1,7 +1,7 @@
 # --- Web framework ---
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
-pydantic==2.10.3
+pydantic==2.10.3 
 
 # --- Embeddings + vector store ---
 sentence-transformers==3.3.1
@@ -20,3 +20,8 @@ accelerate==1.1.1
 
 # --- Optional but recommended ---
 python-multipart==0.0.19   # for FastAPI file uploads if you add /upload later
+
+# --- Manual classifier (Option B: auto-routing) ---
+# matplotlib used by train_classifier.py to save the loss-curve plot for the report.
+# numpy is already a transitive dep of torch/sklearn; we pin it lightly via pip's resolver.
+matplotlib==3.9.4
