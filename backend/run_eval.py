@@ -74,12 +74,14 @@ REQUEST_TIMEOUT = 600
 #   10, 15  -> questions 11 to 15
 #   15, 20  -> questions 16 to 20
 #   20, 25  -> questions 21 to 25
-START_INDEX = 20
+#   0, 25   -> ALL 25 questions in one shot (set APPEND_RESULTS=False to overwrite)
+START_INDEX = 0
 END_INDEX = 25
 
 # If True, append to existing results.csv.
-# Keep this True when running batches.
-APPEND_RESULTS = True
+# Set to False when doing a fresh full run for a new variant (V2, V3, etc.)
+# so the old results aren't mixed with the new ones.
+APPEND_RESULTS = False
 
 
 # ---------------------------------------------------------------------

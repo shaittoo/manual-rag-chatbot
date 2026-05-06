@@ -17,9 +17,12 @@ from typing import List
 
 from sentence_transformers import SentenceTransformer
 
-# 384-dim, ~80MB, fast on CPU. Good default for English manuals.
-# If your manuals are technical/code-heavy, consider "BAAI/bge-small-en-v1.5".
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# V2 change (was: sentence-transformers/all-MiniLM-L6-v2):
+# bge-small-en-v1.5 is also 384-dim and ~130MB, but trained with a more recent
+# contrastive objective and consistently outperforms MiniLM on retrieval
+# benchmarks (e.g. MTEB). Vector dimensionality matches MiniLM, but the vector
+# space is different — ChromaDB MUST be re-ingested after this change.
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 @lru_cache(maxsize=1)

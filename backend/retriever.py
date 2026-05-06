@@ -25,14 +25,38 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
 
 import chromadb
 from chromadb.config import Settings
 from pypdf import PdfReader
+from sentence_transformers import CrossEncoder
 
 from embedder import embed_query, embed_texts
+
+
+# --- Cross-encoder re-ranker (V2) ----------------------------------------
+#
+# Bi-encoder retrieval (cosine over MiniLM/bge embeddings) is fast but coarse:
+# it picks chunks whose pre-computed embeddings happen to land near the query
+# vector. A cross-encoder takes a (query, candidate) pair and runs both through
+# a transformer together, producing a much more accurate relevance score — at
+# the cost of running per pair (no precomputation).
+#
+# Standard recipe: retrieve top-N candidates with the bi-encoder, then re-rank
+# those N with the cross-encoder, return the top-k.
+#
+# Model: ms-marco-MiniLM-L-6-v2 — 90MB, trained on MS MARCO passage ranking,
+# fast enough for ~20-pair re-ranking on CPU (1-2 seconds).
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RETRIEVE_CANDIDATES = 20  # bi-encoder top-N; later cut to top_k by reranker
+
+
+@lru_cache(maxsize=1)
+def _get_reranker() -> CrossEncoder:
+    return CrossEncoder(RERANKER_MODEL)
 
 
 # --- Paths ---------------------------------------------------------------
@@ -81,11 +105,18 @@ def _read_pdf(path: Path) -> List[tuple[int, str]]:
 
 def _chunk_text(
     text: str,
-    chunk_size: int = 800,
-    overlap: int = 120,
+    chunk_size: int = 500,
+    overlap: int = 80,
 ) -> List[str]:
     """
     Split text into overlapping windows.
+
+    V2 change (was 800 / 120): smaller chunks are more topically focused and
+    reduce the chance that one retrieved chunk mixes multiple unrelated
+    procedures. Smaller chunks mean more chunks total — but the cross-encoder
+    re-ranker (see search()) is responsible for picking the best ones, so the
+    bi-encoder's job becomes "produce reasonable candidates" rather than "rank
+    perfectly on the first pass."
 
     Why overlap? Important context (e.g. a step number and its description) often
     spans a paragraph boundary. Overlap lets at least one chunk see the full context.
@@ -205,41 +236,64 @@ def search(
     source: Optional[str] = None,
 ) -> List[RetrievedChunk]:
     """
-    Return the top_k most similar chunks to `query`.
+    Return the top_k most relevant chunks to `query`.
 
-    If `source` is provided, restrict retrieval to chunks from that exact filename
-    (e.g. source="db05a9.pdf"). This is the cheapest way to handle a multi-appliance
-    corpus: instead of mixing chunks from a washer manual and a printer manual,
-    the user picks which appliance they're asking about.
+    V2 retrieval = two-stage:
+        1. Bi-encoder (bge embedder) retrieves top-N candidates from Chroma
+           (N = RETRIEVE_CANDIDATES = 20).
+        2. Cross-encoder (ms-marco-MiniLM-L-6-v2) re-scores each (query, chunk)
+           pair, and we return the top_k by the cross-encoder's score.
+
+    If `source` is provided, retrieval is restricted to chunks from that exact
+    filename (e.g. source="db05a9.pdf"). This is the cheapest way to handle a
+    multi-appliance corpus: instead of mixing chunks from a washer manual and a
+    printer manual, the user picks which appliance they're asking about.
+
+    The exposed `score` field is the cross-encoder relevance score (raw logit
+    from MS-MARCO; higher = more relevant; not bounded to [0,1]). Original
+    cosine similarity is kept internally for diagnostics but not surfaced.
     """
     client = _get_client()
     coll = _get_collection(client)
     if coll.count() == 0:
         return []
 
+    # Stage 1: bi-encoder retrieval over top-N candidates.
     query_vec = embed_query(query)
     where = {"source": source} if source else None
+    n_candidates = max(top_k, RETRIEVE_CANDIDATES)
     res = coll.query(
         query_embeddings=[query_vec],
-        n_results=top_k,
+        n_results=n_candidates,
         where=where,
         include=["documents", "metadatas", "distances"],
     )
 
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
-    dists = res.get("distances", [[]])[0]
+    if not docs:
+        return []
+
+    # Stage 2: cross-encoder re-ranking.
+    reranker = _get_reranker()
+    pairs = [(query, doc) for doc in docs]
+    rerank_scores = reranker.predict(pairs)
+
+    # Sort by cross-encoder score descending and take top_k.
+    indexed = sorted(
+        zip(docs, metas, rerank_scores),
+        key=lambda x: float(x[2]),
+        reverse=True,
+    )[:top_k]
 
     out: List[RetrievedChunk] = []
-    for doc, meta, dist in zip(docs, metas, dists):
-        # cosine distance in Chroma is (1 - cosine_similarity); convert back to similarity.
-        score = 1.0 - float(dist)
+    for doc, meta, ce_score in indexed:
         out.append(
             RetrievedChunk(
                 text=doc,
                 source=meta.get("source", "unknown"),
                 page=int(meta.get("page", 0)),
-                score=score,
+                score=round(float(ce_score), 4),
             )
         )
     return out
