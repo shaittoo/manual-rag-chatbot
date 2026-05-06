@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional
-
+import torch
 import chromadb
 from chromadb.config import Settings
 from pypdf import PdfReader
@@ -56,7 +56,9 @@ RETRIEVE_CANDIDATES = 20  # bi-encoder top-N; later cut to top_k by reranker
 
 @lru_cache(maxsize=1)
 def _get_reranker() -> CrossEncoder:
-    return CrossEncoder(RERANKER_MODEL)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Reranker running on: {device}", flush=True)
+    return CrossEncoder(RERANKER_MODEL, device=device)
 
 
 # --- Paths ---------------------------------------------------------------
