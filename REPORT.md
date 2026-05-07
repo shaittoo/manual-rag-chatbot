@@ -144,6 +144,20 @@ All `/ask` generation across V1, V2, and V3 ran on **CPU-only** Windows 11 hardw
 
 RAGAS scoring is **separable from generation**, and Duranne re-ran the V1/V2/V3 judge passes on a machine with NVIDIA CUDA support. Qwen-2.5-3B as judge runs ~10× faster on CUDA via Ollama than on CPU: a full 25-question × 4-metric pass took **~24 minutes on CUDA** (V1: 1429 s, V2: 1045 s, V3: 1089 s) versus the **~9.7 hours** the original V1 CPU judge run took. We discuss the implications of judge-hardware change on metric reproducibility in §4.4 and §6.4.
 
+### 3.4 Deep Learning Components and Concepts
+
+This project uses deep learning at three layers of the pipeline plus one component that we trained end-to-end. Naming the underlying concepts explicitly here, since they otherwise hide behind library calls:
+
+**(i) Embedding (transformer encoders, frozen).** `sentence-transformers/all-MiniLM-L6-v2` (V1) and `BAAI/bge-small-en-v1.5` (V2/V3) are encoder-only transformers that map a tokenized input sentence to a 384-dimensional dense vector via stacked self-attention layers. The output vector encodes semantic similarity geometrically — sentences with similar meaning lie close in the vector space, regardless of surface form. We L2-normalize the vectors so cosine similarity reduces to a dot product. *DL concepts: self-attention, contextual embeddings, dense representation learning, contrastive pretraining, vector-space semantics.*
+
+**(ii) Re-ranking (cross-encoder transformer, frozen, V2/V3 only).** `cross-encoder/ms-marco-MiniLM-L-6-v2` is an encoder transformer that takes a `(query, document)` pair as a *single concatenated input* and outputs a relevance logit. This contrasts with the bi-encoder of (i), which encodes query and document independently and only compares them post-hoc via similarity. The cross-encoder's joint encoding captures finer query-document interactions — at the cost of having to score each candidate at query time rather than amortizing the encoding into a precomputed index. We use the cross-encoder over the top-20 bi-encoder candidates and keep the top-4 by reranker score. *DL concepts: cross-encoder vs. bi-encoder retrieval, two-stage retrieve-then-rerank, transformer-based pairwise scoring.*
+
+**(iii) Generation (decoder-only transformer, frozen).** `microsoft/Phi-3-mini-4k-instruct` (V1, V2; 3.8B parameters) and `Qwen-2.5-3B-Instruct` via Ollama (V3; ~3B parameters, INT4-quantized GGUF) are decoder-only transformers that perform autoregressive token-by-token generation conditioned on the retrieved context plus a system prompt. We use **greedy decoding** (`temperature=0`) — selecting the argmax token at each step — rather than nucleus / top-p sampling, on the principle that factual lookup benefits from consistency over diversity. *DL concepts: causal self-attention, autoregressive generation, instruction-tuned language models, decoding strategies (greedy vs. sampling), prompt-conditioned generation.*
+
+**(iv) Manual classifier (small FFN, trained end-to-end by us).** We train a feed-forward neural network on top of frozen MiniLM embeddings to predict which manual a query is about (described in detail in §5.6). This is the only component of the system whose weights are updated by gradient descent in our work; everything else is pretrained. *DL concepts demonstrated: supervised classification, feed-forward networks, ReLU non-linearity, dropout regularization, transfer learning (frozen embedder + trainable head), cross-entropy loss, Adam optimization with weight decay (L2 regularization), k-fold cross-validation, data augmentation.*
+
+The project is therefore not "RAG without deep learning" — every component on the inference path is a deep neural network, and one of them is trained end-to-end with the full supervised-learning workflow. What this project does *not* include, and which would be obvious next steps, is fine-tuning the larger pretrained components (e.g., LoRA on Phi-3-mini against a synthesized Q-A dataset from the manuals); we discuss these in §7.2.
+
 ---
 
 ## 4. Evaluation Methodology
@@ -323,13 +337,22 @@ Before the citation-strip post-processor was added, Phi-3-mini emitted answers e
 
 The V1/V2/V3 experiment evaluates *answer quality given a known source manual*; the user is assumed to have already selected which appliance their question is about. In practice this is an awkward UX — a user typing *"my washer is leaking"* should not have to know which file in the corpus contains the answer. To address this we trained a small feed-forward classifier that predicts the source manual directly from the query, enabling an auto-routed `/ask_auto` endpoint that does not require the user to specify a `source`.
 
-**Architecture.** The classifier sits on top of a frozen `sentence-transformers/all-MiniLM-L6-v2` embedder. The embedding (384-dim, L2-normalized) is fed into a feed-forward head:
+**Architecture.** The classifier is a feed-forward neural network trained end-to-end. It sits on top of a frozen `sentence-transformers/all-MiniLM-L6-v2` embedder; the 384-dimensional L2-normalized embedding is fed into a small trainable head:
 
 ```
-Linear(384 -> 128) -> ReLU -> Dropout(0.2) -> Linear(128 -> 5)
+Linear(384 → 128) → ReLU → Dropout(p=0.2) → Linear(128 → 5)
 ```
 
-Output logits are softmaxed to produce P(manual | query). The head has roughly 50K trainable parameters; the embedder is frozen, so all backpropagation is restricted to the head. This is a deliberate hedge against overfitting on the small training set.
+Output logits are passed through softmax to produce *P(manual | query)*. The head has roughly 50K trainable parameters; the embedder is frozen, so all backpropagation is restricted to the head. This is a deliberate **transfer-learning configuration** — we exploit the semantic structure that MiniLM has already learned from large-scale contrastive pretraining, and only train a small classification head from our own labeled data, which mitigates overfitting on the small training set (~100 augmented examples).
+
+**Training procedure.** The training loop in `backend/train_classifier.py` implements the standard supervised-learning workflow:
+- **Loss function:** categorical cross-entropy over the 5 classes.
+- **Optimizer:** Adam (`lr = 1e-3`, `weight_decay = 1e-4` — the latter is L2 regularization on the head's weights, discouraging large coefficients).
+- **Regularization:** dropout `p = 0.2` on the hidden layer at training time, disabled at inference.
+- **Batch size:** 8 (mini-batch SGD via Adam).
+- **Epochs:** 60 (training loss converges to ~0.009 by epoch 60, indicating the model has comfortably memorized the training distribution).
+- **Backpropagation:** PyTorch autograd computes gradients of the cross-entropy loss with respect to the head's parameters at each step; the embedder's parameters are excluded from the optimizer.
+- **Reproducibility:** fixed random seeds (`SEED=42`) for `random`, `numpy`, and `torch`.
 
 **Training data.** The 25 hand-labeled questions in `eval/questions.json` are augmented by deterministic paraphrasing — synonym substitution on appliance terms (`washer ↔ washing machine`, `fridge ↔ refrigerator`, `aircon ↔ air conditioner ↔ AC`) and lexical rewrites on common question stems (`What should I check ↔ What can I check ↔ What should I look at`). Augmentation produces **103 examples** distributed roughly evenly across the five manual classes:
 
@@ -439,6 +462,8 @@ A 3B-parameter judge, when run on CPU with default `max_workers=2` concurrency, 
 **Duranne B. Duran.** 25-question evaluation set with manually verified reference answers. `run_eval.py` harness for batch RAG queries. `score_results.py` AI-assisted Correct/Partial/Wrong/Refused scoring pipeline using Ollama+Qwen. RAGAS evaluation infrastructure (`run_ragas.py`).
 
 **Joint.** Evaluation methodology design, results analysis, and report.
+
+**Deep-learning component breakdown.** The project's RAG inference pipeline composes pretrained transformer-based deep neural networks: encoder transformers for embedding (MiniLM and bge), a cross-encoder transformer for re-ranking (MS-MARCO MiniLM), and decoder-only transformers for generation (Phi-3-mini, Qwen-2.5-3B). The manual classifier in §5.6 is the one component trained end-to-end by us; its training demonstrates the full supervised deep-learning workflow — feed-forward architecture design, ReLU non-linearity, dropout regularization, transfer learning via frozen embeddings, cross-entropy loss, Adam optimization with L2 weight decay, and 5-fold cross-validation. The project does *not* include fine-tuning of the larger pretrained components (Phi-3, the embedders, or the cross-encoder); we list those as natural extensions in §7.2.
 
 ---
 
