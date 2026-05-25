@@ -1,35 +1,32 @@
-/* ----------------------------------------------------------------------
-   App.css — chat UI for Manu manual RAG demo.
-   Plain CSS, dark theme. No frameworks.
-   ---------------------------------------------------------------------- */
+/* ============================================================
+   App.css — Minimalist, modern, white chat UI for Manu.
+   ============================================================ */
 
 :root {
-  --bg: #0e1116;
-  --bg-elevated: #161b22;
-  --bg-hover: #1f262f;
-  --border: #2a3138;
-  --border-strong: #3a4250;
-  --text: #e8edf3;
-  --text-muted: #98a2b1;
-  --text-faint: #6b7480;
-  --accent: #6aa6ff;
-  --accent-soft: #1f3358;
-  --accent-text: #cfe1ff;
-  --user-bubble: #1f3358;
-  --user-bubble-text: #e8f1ff;
-  --assistant-bubble: #161b22;
-  --error: #f87171;
-  --success: #34d399;
-  --radius: 10px;
-  /* Centered layout: backgrounds (header/footer) span the full viewport,
-     while the chat content + brand are centered inside max-width. */
-  --max-width: 1200px;
-  --content-padding-x: 32px;
+  --bg: #ffffff;
+  --bg-elevated: #f9fafb;
+  --bg-hover: #f3f4f6;
+  --border: #e5e7eb;
+  --border-subtle: #f0f0f0;
+  --text: #5a5a5a;
+  --text-muted: #9ca3af;
+  --text-faint: #d1d5db;
+  --accent: #7c3aed;
+  --accent-light: #f3e8ff;
+  --accent-soft: #ede9fe;
+  --accent-text: #7c3aed;
+  --user-bubble: #7c3aed;
+  --user-bubble-text: #ffffff;
+  --assistant-bubble: #f9fafb;
+  --assistant-bubble-text: #1f2937;
+  --error: #ef4444;
+  --success: #10b981;
+  --radius: 12px;
+  --max-width: 900px;
+  --content-padding-x: 24px;
 }
 
-/* Force #root to span full viewport — Vite's default index.css ships with
-   #root { max-width: 1280px; padding: 2rem; ... } which breaks our layout.
-   These !important rules win regardless of what index.css contains. */
+/* Force #root to span full viewport */
 #root {
   max-width: none !important;
   width: 100% !important;
@@ -37,7 +34,8 @@
   margin: 0 !important;
   padding: 0 !important;
   text-align: left !important;
-  display: block !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 * {
@@ -52,25 +50,22 @@ html, body, #root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
     Ubuntu, "Helvetica Neue", sans-serif;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
-/* Override any of Vite's default body centering / padding */
 body { display: block; place-items: stretch; min-width: 0; }
 
 code {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.9em;
   background: var(--bg-elevated);
-  padding: 1px 5px;
+  padding: 2px 6px;
   border-radius: 4px;
-  color: var(--text-muted);
+  color: var(--accent);
 }
 
-/* ---------- App shell ---------- */
+/* App shell */
 
-/* Explicit text-align: left scoped to .app overrides any inherited
-   text-align:center from Vite's default index.css (#root selector). */
 .app, .app * {
   text-align: left;
 }
@@ -83,30 +78,34 @@ code {
 }
 
 .app-header {
-  border-bottom: 1px solid var(--border);
-  padding: 14px 0;           /* horizontal padding lives on .brand now */
-  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 20px 0;
+  background: var(--bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .brand {
   max-width: var(--max-width);
-  margin: 0 auto;            /* centered horizontally inside the full-width header */
+  margin: 0 auto;
   padding: 0 var(--content-padding-x);
   display: flex;
   align-items: baseline;
-  gap: 14px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
 .brand h1 {
   margin: 0;
-  font-size: 22px;
-  letter-spacing: -0.01em;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-h);
 }
 
 .tagline {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 400;
 }
 
 .app-main {
@@ -114,14 +113,15 @@ code {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
 }
 
 .app-footer {
-  border-top: 1px solid var(--border);
-  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+  padding: 12px 0;
   background: var(--bg-elevated);
   font-size: 12px;
-  color: var(--text-faint);
+  color: var(--text-muted);
 }
 
 .app-footer-inner {
@@ -131,14 +131,14 @@ code {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
 }
 
 .app-footer .hint {
   font-style: italic;
 }
 
-/* ---------- Chat window ---------- */
+/* Chat window */
 
 .chat-window {
   flex: 1;
@@ -146,8 +146,8 @@ code {
   flex-direction: column;
   width: 100%;
   max-width: var(--max-width);
-  margin: 0 auto;            /* centered horizontally */
-  padding: 16px var(--content-padding-x);
+  margin: 0 auto;
+  padding: 20px var(--content-padding-x);
   overflow: hidden;
 }
 
@@ -157,50 +157,76 @@ code {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 8px 4px 24px;
+  padding: 12px 0 24px;
   scroll-behavior: smooth;
+}
+
+.message-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.message-list::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .empty-state {
   margin: auto;
-  text-align: center !important;   /* keep the welcome text centered specifically */
+  text-align: center !important;
   color: var(--text-muted);
-  padding: 32px 16px;
+  padding: 40px 16px;
+}
+
+.empty-state p {
+  margin: 8px 0;
+  font-size: 15px;
 }
 
 .empty-state .examples {
-  font-size: 13px;
-  margin-top: 12px;
+  font-size: 14px;
+  margin-top: 16px;
 }
 
 .empty-state em {
-  color: var(--accent-text);
+  color: var(--accent);
   font-style: italic;
+  font-weight: 500;
 }
 
-/* ---------- Bubbles ---------- */
+/* Bubbles */
 
 .bubble {
-  max-width: 86%;
-  padding: 12px 14px;
+  max-width: 85%;
+  padding: 14px 16px;
   border-radius: var(--radius);
   border: 1px solid transparent;
   word-wrap: break-word;
   white-space: pre-wrap;
-  text-align: left;          /* belt-and-braces against parent text-align:center */
+  text-align: left;
+  transition: all 0.2s ease;
 }
 
 .bubble-user {
   align-self: flex-end;
   background: var(--user-bubble);
   color: var(--user-bubble-text);
-  border-color: var(--accent);
+  border-color: var(--user-bubble);
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.15);
 }
 
 .bubble-assistant {
   align-self: flex-start;
   background: var(--assistant-bubble);
   border-color: var(--border);
+  color: var(--assistant-bubble-text);
 }
 
 .bubble-loading {
@@ -210,26 +236,31 @@ code {
 .bubble-error {
   border-color: var(--error);
   color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
 }
 
 .bubble-content {
-  font-size: 14.5px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: inherit;
 }
 
 .answer-content {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .routing-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  padding: 4px 10px;
+  background: var(--accent-light);
+  color: var(--accent);
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  border: 1px solid var(--accent-soft);
 }
 
 .routing-pct {
@@ -242,17 +273,17 @@ code {
 .loading-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--text-muted);
 }
 
 .loading-label {
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 .dots {
   display: inline-flex;
-  gap: 4px;
+  gap: 5px;
 }
 
 .dots span {
@@ -261,40 +292,47 @@ code {
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  animation: dot-pulse 1.2s ease-in-out infinite;
+  animation: dot-pulse 1.4s ease-in-out infinite;
 }
 
-.dots span:nth-child(2) { animation-delay: 0.15s; }
-.dots span:nth-child(3) { animation-delay: 0.3s; }
+.dots span:nth-child(1) { animation-delay: 0s; }
+.dots span:nth-child(2) { animation-delay: 0.2s; }
+.dots span:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes dot-pulse {
-  0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); }
-  40%           { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.1); }
 }
 
-/* ---------- Composer (input row) ---------- */
+/* Composer (input row) */
 
 .composer {
   display: flex;
   gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .composer-input {
   flex: 1;
   padding: 12px 14px;
   border-radius: var(--radius);
-  border: 1px solid var(--border-strong);
-  background: var(--bg-elevated);
-  color: var(--text);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
   font-size: 15px;
   font-family: inherit;
   outline: none;
+  transition: all 0.2s ease;
+}
+
+.composer-input::placeholder {
+  color: var(--text-muted);
 }
 
 .composer-input:focus {
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
 }
 
 .composer-input:disabled {
@@ -307,28 +345,35 @@ code {
   border-radius: var(--radius);
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: var(--bg);
+  color: white;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .composer-submit:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .composer-submit:hover:not(:disabled) {
-  opacity: 0.9;
+  background: #6d28d9;
+  border-color: #6d28d9;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
-/* ---------- Sources panel ---------- */
+.composer-submit:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Sources panel */
 
 .sources-panel {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 12px;
 }
 
 .sources-panel summary {
@@ -337,38 +382,42 @@ code {
   font-size: 13px;
   user-select: none;
   outline: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
 }
 
 .sources-panel summary:hover {
-  color: var(--accent-text);
+  color: #6d28d9;
 }
 
 .sources-list {
   list-style: decimal;
   padding-left: 22px;
-  margin: 10px 0 4px;
+  margin: 12px 0 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
 .source-item {
-  border-left: 2px solid var(--border-strong);
-  padding-left: 10px;
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  text-align: left;
 }
 
 .source-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   font-size: 12px;
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .source-name {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  color: var(--accent-text);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .source-page,
@@ -379,17 +428,66 @@ code {
 .source-snippet {
   font-size: 13px;
   color: var(--text);
-  line-height: 1.45;
+  line-height: 1.5;
   white-space: pre-wrap;
 }
 
-/* ---------- Mobile ---------- */
+/* Mobile */
 
-@media (max-width: 640px) {
-  :root { --content-padding-x: 14px; }
-  .app-header { padding: 10px 14px; }
-  .chat-window { padding: 10px var(--content-padding-x); }
-  .bubble { max-width: 92%; }
-  .tagline { font-size: 12px; }
-  .app-footer { font-size: 11px; padding: 6px 14px; }
+@media (max-width: 768px) {
+  :root { --content-padding-x: 16px; }
+  .app-header { padding: 16px 0; }
+  .brand { gap: 12px; }
+  .brand h1 { font-size: 24px; }
+  .chat-window { padding: 16px var(--content-padding-x); }
+  .bubble { max-width: 92%; padding: 12px 14px; }
+  .tagline { font-size: 13px; }
+  .app-footer { font-size: 11px; padding: 10px 16px; }
+  @media (max-width: 768px) {
+  .model-picker {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+}
+
+@media (max-width: 480px) {
+  :root { --content-padding-x: 12px; }
+  .brand h1 { font-size: 20px; }
+  .bubble { max-width: 95%; }
+}
+
+.model-picker {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.model-picker label {
+  font-weight: 500;
+}
+
+.model-picker select {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.model-picker select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+}
+
+.model-picker select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

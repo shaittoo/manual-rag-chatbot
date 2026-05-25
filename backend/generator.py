@@ -5,19 +5,15 @@ Pluggable generator backend for the manual RAG chatbot.
 
 Backends:
 1. TransformersGenerator
-   - Current Phi-3-mini-4k-instruct via Hugging Face Transformers.
+   - Phi-3-mini-4k-instruct via Hugging Face Transformers.
 
 2. OllamaGenerator
    - Qwen via local Ollama HTTP API.
    - Default Ollama URL: http://localhost:11434/api/generate
 
-Switch backend using environment variables:
-
-    GENERATOR_BACKEND=transformers
-    GENERATOR_BACKEND=ollama
-
-Default:
-    transformers
+Supports:
+- frontend dropdown model switching
+- conversational / follow-up questions through chat history
 """
 
 from __future__ import annotations
@@ -27,7 +23,7 @@ import os
 import urllib.error
 import urllib.request
 from functools import lru_cache
-from typing import List, Protocol
+from typing import List, Optional, Protocol
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -39,7 +35,9 @@ from retriever import RetrievedChunk
 # CONFIG
 # ---------------------------------------------------------------------
 
-GENERATOR_BACKEND = os.environ.get("GENERATOR_BACKEND", "transformers").lower().strip()
+DEFAULT_GENERATOR_BACKEND = (
+    os.environ.get("GENERATOR_BACKEND", "transformers").lower().strip()
+)
 
 TRANSFORMERS_MODEL_NAME = os.environ.get(
     "GENERATOR_MODEL",
@@ -65,16 +63,16 @@ OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
 
 SYSTEM_PROMPT = (
     "You are a helpful assistant for product manuals. "
-    "Answer the user's question using ONLY the provided context. "
+    "Answer the user's current question using ONLY the provided manual context. "
+    "Use the conversation history only to understand what the user is referring to. "
     "If the context does not contain the answer, say you don't know — do not invent steps, "
     "part numbers, or model details. "
     "\n\n"
     "IMPORTANT — relevance discipline: "
-    "Answer ONLY the specific question asked. Be precise about the user's actual problem. "
+    "Answer ONLY the specific current question asked. Be precise about the user's actual problem. "
     "Even if the retrieved context contains additional troubleshooting steps, settings, or features "
     "that are mentioned alongside the relevant material, do NOT include them in your answer "
-    "unless they directly address the user's question. For example, if the user asks about a "
-    "paper jam, do not include fax-related settings even if they appear in the context. "
+    "unless they directly address the user's current question. "
     "Prefer a shorter focused answer over a longer comprehensive one. "
     "\n\n"
     "Do NOT include filenames, page numbers, or parenthetical citations in your answer — "
@@ -85,14 +83,12 @@ SYSTEM_PROMPT = (
 def _format_context(chunks: List[RetrievedChunk]) -> str:
     """
     Render retrieved chunks as a numbered context block.
-
-    Including the source filename inline gives the model grounding context.
-    The final API sources are still handled outside this file by rag_pipeline.py.
     """
     if not chunks:
         return "(no context retrieved)"
 
     blocks = []
+
     for i, c in enumerate(chunks, start=1):
         header = f"[{i}] {c.source}, p. {c.page}"
         blocks.append(f"{header}\n{c.text}")
@@ -100,19 +96,62 @@ def _format_context(chunks: List[RetrievedChunk]) -> str:
     return "\n\n".join(blocks)
 
 
-def _build_messages(question: str, chunks: List[RetrievedChunk]) -> list[dict[str, str]]:
+def _format_history(history: Optional[List[dict]]) -> str:
+    """
+    Format recent chat history for follow-up questions.
+
+    Expected shape:
+        [
+            {"role": "user", "content": "..."},
+            {"role": "assistant", "content": "..."}
+        ]
+    """
+    if not history:
+        return "(no previous conversation)"
+
+    lines = []
+
+    for msg in history[-6:]:
+        role = msg.get("role", "")
+        content = " ".join((msg.get("content") or "").split())
+
+        if not content:
+            continue
+
+        if len(content) > 700:
+            content = content[:700] + "..."
+
+        if role not in {"user", "assistant"}:
+            role = "user"
+
+        lines.append(f"{role}: {content}")
+
+    return "\n".join(lines) if lines else "(no previous conversation)"
+
+
+def _build_messages(
+    question: str,
+    chunks: List[RetrievedChunk],
+    history: Optional[List[dict]] = None,
+) -> list[dict[str, str]]:
     """
     Build one shared prompt structure for both backends.
+
     Transformers uses this as chat messages.
     Ollama converts this same structure into a plain prompt.
     """
     context = _format_context(chunks)
+    conversation = _format_history(history)
 
     user_content = (
-        f"Context:\n{context}\n\n"
-        f"Question: {question}\n\n"
-        "Answer concisely in plain prose. Address ONLY the specific question asked. "
-        "If a step or fact in the context does not directly answer this question, omit it. "
+        f"Conversation so far:\n{conversation}\n\n"
+        f"Context from manuals:\n{context}\n\n"
+        f"Current question: {question}\n\n"
+        "Answer the current question using the manual context. "
+        "Use the conversation history only to understand references like "
+        "'that', 'it', 'after that', or 'what if it still happens'. "
+        "Do not repeat previous answers unless needed. "
+        "If the manual context does not contain the answer, say you don't know. "
         "Do not include filenames, page numbers, or parenthetical citations — those are "
         "added by the system."
     )
@@ -152,8 +191,9 @@ class GeneratorBackend(Protocol):
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 100,
+        max_new_tokens: int = 384,
         temperature: float = 0.0,
+        history: Optional[List[dict]] = None,
     ) -> str:
         ...
 
@@ -183,7 +223,9 @@ class TransformersGenerator:
         return "cpu", torch.float32
 
     def _load(self):
-        """Load tokenizer + model once per process."""
+        """
+        Load tokenizer + model once per process.
+        """
         device, dtype = self._device_and_dtype()
 
         tokenizer = AutoTokenizer.from_pretrained(
@@ -191,16 +233,24 @@ class TransformersGenerator:
             trust_remote_code=True,
         )
 
+        model_kwargs = {
+            "torch_dtype": dtype,
+            "trust_remote_code": True,
+            "low_cpu_mem_usage": True,
+        }
+
+        # On CUDA, let Transformers/Accelerate decide placement.
+        # This helps on smaller GPUs by offloading some weights if needed.
+        if device == "cuda":
+            model_kwargs["device_map"] = "auto"
+
         model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            torch_dtype=dtype,
-            trust_remote_code=True,
-            device_map=device if device != "cpu" else None,
-            low_cpu_mem_usage=True,
+            **model_kwargs,
         )
 
-        if device == "cpu":
-            model.to("cpu")
+        if device in {"cpu", "mps"}:
+            model.to(device)
 
         model.eval()
 
@@ -210,10 +260,15 @@ class TransformersGenerator:
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 100,
+        max_new_tokens: int = 384,
         temperature: float = 0.0,
+        history: Optional[List[dict]] = None,
     ) -> str:
-        messages = _build_messages(question, chunks)
+        messages = _build_messages(
+            question=question,
+            chunks=chunks,
+            history=history,
+        )
 
         input_ids = self.tokenizer.apply_chat_template(
             messages,
@@ -221,18 +276,33 @@ class TransformersGenerator:
             return_tensors="pt",
         ).to(self.model.device)
 
+        # Fixes warning:
+        # "The attention mask is not set and cannot be inferred..."
+        attention_mask = torch.ones_like(input_ids).to(self.model.device)
+
+        generation_kwargs = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": temperature > 0,
+            "pad_token_id": self.tokenizer.eos_token_id,
+            "attention_mask": attention_mask,
+        }
+
+        if temperature > 0:
+            generation_kwargs["temperature"] = temperature
+            generation_kwargs["top_p"] = 0.9
+
         with torch.no_grad():
             output_ids = self.model.generate(
                 input_ids,
-                max_new_tokens=max_new_tokens,
-                do_sample=temperature > 0,
-                temperature=max(temperature, 1e-5),
-                top_p=0.9,
-                pad_token_id=self.tokenizer.eos_token_id,
+                **generation_kwargs,
             )
 
         new_tokens = output_ids[0, input_ids.shape[-1]:]
-        return self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+
+        return self.tokenizer.decode(
+            new_tokens,
+            skip_special_tokens=True,
+        ).strip()
 
 
 # ---------------------------------------------------------------------
@@ -258,10 +328,16 @@ class OllamaGenerator:
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 100,
+        max_new_tokens: int = 384,
         temperature: float = 0.0,
+        history: Optional[List[dict]] = None,
     ) -> str:
-        messages = _build_messages(question, chunks)
+        messages = _build_messages(
+            question=question,
+            chunks=chunks,
+            history=history,
+        )
+
         prompt = _messages_to_plain_prompt(messages)
 
         payload = {
@@ -303,17 +379,31 @@ class OllamaGenerator:
 # BACKEND FACTORY
 # ---------------------------------------------------------------------
 
-@lru_cache(maxsize=1)
-def _get_generator() -> GeneratorBackend:
-    if GENERATOR_BACKEND == "transformers":
+@lru_cache(maxsize=4)
+def get_generator(
+    generator_backend: str = DEFAULT_GENERATOR_BACKEND,
+) -> GeneratorBackend:
+    """
+    Return the requested generator backend.
+
+    This is cached per backend, so switching from the frontend does not reload
+    the same model repeatedly.
+
+    Example cache keys:
+        get_generator("transformers")
+        get_generator("ollama")
+    """
+    backend = (generator_backend or DEFAULT_GENERATOR_BACKEND).lower().strip()
+
+    if backend == "transformers":
         return TransformersGenerator()
 
-    if GENERATOR_BACKEND == "ollama":
+    if backend == "ollama":
         return OllamaGenerator()
 
     raise ValueError(
-        f"Invalid GENERATOR_BACKEND='{GENERATOR_BACKEND}'. "
-        "Use GENERATOR_BACKEND=transformers or GENERATOR_BACKEND=ollama."
+        f"Invalid generator_backend='{generator_backend}'. "
+        "Use 'transformers' or 'ollama'."
     )
 
 
@@ -324,20 +414,27 @@ def _get_generator() -> GeneratorBackend:
 def generate(
     question: str,
     chunks: List[RetrievedChunk],
-    max_new_tokens: int = 100,
+    generator_backend: str = DEFAULT_GENERATOR_BACKEND,
+    max_new_tokens: int = 384,
     temperature: float = 0.0,
+    history: Optional[List[dict]] = None,
 ) -> str:
     """
     Generate an answer grounded in the retrieved chunks.
 
-    This function is intentionally unchanged as the public interface, so
-    rag_pipeline.py can continue calling generate(query, chunks).
+    The frontend can switch models per request by sending:
+        generator_backend="transformers"
+        generator_backend="ollama"
+
+    The frontend can also pass recent chat turns through `history`
+    for conversational follow-up questions.
     """
-    generator = _get_generator()
+    generator = get_generator(generator_backend)
 
     return generator.generate(
         question=question,
         chunks=chunks,
         max_new_tokens=max_new_tokens,
         temperature=temperature,
+        history=history,
     )
