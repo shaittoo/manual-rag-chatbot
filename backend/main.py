@@ -17,7 +17,7 @@ Run locally:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,13 +26,14 @@ from pydantic import BaseModel, Field
 from rag_pipeline import ask_dict
 from retriever import ingest, list_sources
 
+
 app = FastAPI(
     title="Manu — Manual RAG Chatbot",
     description="Ask natural-language questions against your product manuals.",
     version="0.1.0",
 )
 
-# CORS: open in dev so the Next.js frontend on a different port can call us.
+# CORS: open in dev so the Vite frontend on a different port can call us.
 # Tighten this to specific origins before any kind of deployment.
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +45,14 @@ app.add_middleware(
 
 # --- Schemas -------------------------------------------------------------
 
+GeneratorBackend = Literal["transformers", "ollama"]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class AskRequest(BaseModel):
     query: str = Field(..., min_length=1, description="The user's question.")
     top_k: int = Field(4, ge=1, le=20, description="How many chunks to retrieve.")
@@ -53,6 +62,17 @@ class AskRequest(BaseModel):
             "Optional filename to restrict retrieval to one manual "
             "(e.g. 'db05a9.pdf'). Use GET /sources to see available filenames."
         ),
+    )
+    generator_backend: GeneratorBackend = Field(
+        "transformers",
+        description=(
+            "Which generator backend to use for this request: "
+            "'transformers' for Phi-3-mini or 'ollama' for Qwen via Ollama."
+        ),
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Recent conversation history for follow-up questions.",
     )
 
 
@@ -72,6 +92,10 @@ class SourcesResponse(BaseModel):
 
 class ClassifyRequest(BaseModel):
     query: str = Field(..., min_length=1, description="The user's question.")
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Recent conversation history for follow-up routing.",
+    )
 
 
 class ClassifyResponse(BaseModel):
@@ -80,11 +104,84 @@ class ClassifyResponse(BaseModel):
     distribution: list[dict]
 
 
+class AskAutoRequest(BaseModel):
+    query: str = Field(..., min_length=1, description="The user's question.")
+    top_k: int = Field(4, ge=1, le=20, description="How many chunks to retrieve.")
+    generator_backend: GeneratorBackend = Field(
+        "transformers",
+        description=(
+            "Which generator backend to use for this request: "
+            "'transformers' for Phi-3-mini or 'ollama' for Qwen via Ollama."
+        ),
+    )
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Recent conversation history for follow-up questions.",
+    )
+
+
 class AskAutoResponse(BaseModel):
     answer: str
     sources: list[dict]
     routed_to: str
     routing_confidence: float
+
+
+# --- Helpers -------------------------------------------------------------
+
+def _history_as_dicts(history: list[ChatMessage]) -> list[dict]:
+    """
+    Convert Pydantic chat messages into plain dicts for rag_pipeline.py.
+    """
+    return [
+        {
+            "role": msg.role,
+            "content": msg.content.strip(),
+        }
+        for msg in history
+        if msg.content and msg.content.strip()
+    ]
+
+
+def _conversation_aware_query(query: str, history: list[ChatMessage]) -> str:
+    """
+    Build a richer query for classifier routing.
+
+    This helps when the user asks follow-up questions like:
+        "What if it still does not work?"
+        "Can I do that again?"
+        "What about after that?"
+
+    The classifier gets the recent conversation plus the current question,
+    so it can still route to the correct manual.
+    """
+    query = query.strip()
+
+    if not history:
+        return query
+
+    lines = []
+
+    for msg in history[-6:]:
+        content = " ".join(msg.content.split())
+
+        if not content:
+            continue
+
+        if len(content) > 500:
+            content = content[:500] + "..."
+
+        lines.append(f"{msg.role}: {content}")
+
+    if not lines:
+        return query
+
+    return (
+        "Conversation so far:\n"
+        + "\n".join(lines)
+        + "\n\nCurrent question:\n"
+        + query
+    )
 
 
 # --- Routes --------------------------------------------------------------
@@ -108,6 +205,7 @@ def ingest_endpoint() -> IngestResponse:
     except RuntimeError as e:
         # e.g. "no text extracted" — almost always means scanned/image PDFs
         raise HTTPException(status_code=422, detail=str(e))
+
     return IngestResponse(**report)
 
 
@@ -119,7 +217,14 @@ def sources_endpoint() -> SourcesResponse:
 
 @app.post("/ask", response_model=AskResponse)
 def ask_endpoint(req: AskRequest) -> AskResponse:
-    result = ask_dict(req.query, top_k=req.top_k, source=req.source)
+    result = ask_dict(
+        req.query,
+        top_k=req.top_k,
+        source=req.source,
+        generator_backend=req.generator_backend,
+        history=_history_as_dicts(req.history),
+    )
+
     return AskResponse(**result)
 
 
@@ -128,13 +233,15 @@ def ask_endpoint(req: AskRequest) -> AskResponse:
 # These two endpoints are gated by the trained weights existing on disk.
 # If `manual_classifier.pt` isn't present, both endpoints return 503 with a
 # helpful message rather than crashing — useful for partial deployments where
-# the classifier hasn't been trained yet (or has been deliberately disabled).
+# the classifier hasn't been trained yet or has been deliberately disabled.
 
 def _load_classifier_or_fail():
     """Lazy import + clean error if weights are missing."""
     try:
         from manual_classifier import predict_full  # noqa: WPS433
+
         return predict_full
+
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=503,
@@ -149,22 +256,40 @@ def _load_classifier_or_fail():
 def classify_endpoint(req: ClassifyRequest) -> ClassifyResponse:
     """
     Predict which manual a query is about, without running RAG.
-    Useful for the frontend to display 'Routing to X (NN%)' before the answer.
+
+    For follow-up questions, we include recent conversation history in the
+    classifier query so vague questions can still be routed correctly.
     """
     predict_full = _load_classifier_or_fail()
-    result = predict_full(req.query)
+
+    classifier_query = _conversation_aware_query(req.query, req.history)
+    result = predict_full(classifier_query)
+
     return ClassifyResponse(**result)
 
 
 @app.post("/ask_auto", response_model=AskAutoResponse)
-def ask_auto_endpoint(req: ClassifyRequest) -> AskAutoResponse:
+def ask_auto_endpoint(req: AskAutoRequest) -> AskAutoResponse:
     """
     Classify -> ask. The user doesn't have to pick a manual; we predict it.
-    Returns the same shape as /ask plus the predicted source and its confidence.
+
+    This also supports:
+    - generator dropdown via generator_backend
+    - follow-up questions via history
     """
     predict_full = _load_classifier_or_fail()
-    routing = predict_full(req.query)
-    result = ask_dict(req.query, source=routing["predicted_source"])
+
+    classifier_query = _conversation_aware_query(req.query, req.history)
+    routing = predict_full(classifier_query)
+
+    result = ask_dict(
+        req.query,
+        top_k=req.top_k,
+        source=routing["predicted_source"],
+        generator_backend=req.generator_backend,
+        history=_history_as_dicts(req.history),
+    )
+
     return AskAutoResponse(
         answer=result["answer"],
         sources=result["sources"],
