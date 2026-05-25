@@ -62,23 +62,27 @@ OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
 # ---------------------------------------------------------------------
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant for product manuals. "
-    "Answer the user's current question using ONLY the provided manual context. "
+    "You are Manu, a helpful assistant for product manuals. "
+    "Your job is to answer the user's current question directly using ONLY the provided manual context. "
     "Use the conversation history only to understand what the user is referring to. "
-    "If the context does not contain the answer, say you don't know — do not invent steps, "
-    "part numbers, or model details. "
     "\n\n"
-    "IMPORTANT — relevance discipline: "
-    "Answer ONLY the specific current question asked. Be precise about the user's actual problem. "
-    "Even if the retrieved context contains additional troubleshooting steps, settings, or features "
-    "that are mentioned alongside the relevant material, do NOT include them in your answer "
-    "unless they directly address the user's current question. "
-    "Prefer a shorter focused answer over a longer comprehensive one. "
+    "Important: Do NOT tell the user to read, check, consult, refer to, or follow the manual. "
+    "You are already reading the manual for them. Instead, extract the useful steps, warnings, "
+    "conditions, or troubleshooting information from the context and explain them directly. "
     "\n\n"
-    "Do NOT include filenames, page numbers, or parenthetical citations in your answer — "
-    "the system appends sources automatically. Just write a clean, direct answer."
+    "If the context gives exact steps, provide the steps clearly. "
+    "If the context gives only general guidance, summarize the specific guidance that is available. "
+    "If the context truly does not contain enough information, say what is missing and avoid inventing details. "
+    "\n\n"
+    "Answer ONLY the current question. Do not add unrelated troubleshooting steps just because they appear nearby. "
+    "Do not invent part numbers, model details, repair procedures, or safety instructions. "
+    "\n\n"
+    "For service manuals, especially air conditioner or refrigerant-related topics, include safety cautions "
+    "when the context indicates servicing should be done by qualified personnel. "
+    "\n\n"
+    "Do NOT include filenames, page numbers, or parenthetical citations in your answer. "
+    "The system displays sources separately."
 )
-
 
 def _format_context(chunks: List[RetrievedChunk]) -> str:
     """
@@ -145,15 +149,20 @@ def _build_messages(
 
     user_content = (
         f"Conversation so far:\n{conversation}\n\n"
-        f"Context from manuals:\n{context}\n\n"
+        f"Manual context:\n{context}\n\n"
         f"Current question: {question}\n\n"
-        "Answer the current question using the manual context. "
-        "Use the conversation history only to understand references like "
-        "'that', 'it', 'after that', or 'what if it still happens'. "
-        "Do not repeat previous answers unless needed. "
-        "If the manual context does not contain the answer, say you don't know. "
-        "Do not include filenames, page numbers, or parenthetical citations — those are "
-        "added by the system."
+        "Answer the current question directly for the user. "
+        "Do not say phrases like 'follow the manual', 'refer to the manual', "
+        "'check the troubleshooting guide', or 'the provided manual context'. "
+        "The user should not need to open the manual after reading your answer. "
+        "\n\n"
+        "If the answer is procedural, use numbered steps. "
+        "If the answer is troubleshooting, give likely checks in order from simplest/safest to more technical. "
+        "If the context is incomplete, say: 'The retrieved manual context does not give the full procedure, "
+        "but it does mention...' and then summarize only what is available. "
+        "\n\n"
+        "Keep the answer focused on the current question. "
+        "Do not include filenames, page numbers, or parenthetical citations."
     )
 
     return [
@@ -191,7 +200,7 @@ class GeneratorBackend(Protocol):
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 384,
+        max_new_tokens: int = 512,
         temperature: float = 0.0,
         history: Optional[List[dict]] = None,
     ) -> str:
@@ -260,7 +269,7 @@ class TransformersGenerator:
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 384,
+        max_new_tokens: int = 512,
         temperature: float = 0.0,
         history: Optional[List[dict]] = None,
     ) -> str:
@@ -328,7 +337,7 @@ class OllamaGenerator:
         self,
         question: str,
         chunks: List[RetrievedChunk],
-        max_new_tokens: int = 384,
+        max_new_tokens: int = 512,
         temperature: float = 0.0,
         history: Optional[List[dict]] = None,
     ) -> str:
@@ -415,7 +424,7 @@ def generate(
     question: str,
     chunks: List[RetrievedChunk],
     generator_backend: str = DEFAULT_GENERATOR_BACKEND,
-    max_new_tokens: int = 384,
+    max_new_tokens: int = 512,
     temperature: float = 0.0,
     history: Optional[List[dict]] = None,
 ) -> str:
