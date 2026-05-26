@@ -3,54 +3,52 @@ retriever.py
 ------------
 PDF ingestion + ChromaDB-backed similarity search.
 
+Final V2 retrieval setup:
+- Embedder: BAAI/bge-small-en-v1.5
+- Chunk size / overlap: 500 / 80
+- Initial retrieval: ChromaDB cosine similarity
+- Reranker: cross-encoder/ms-marco-MiniLM-L-6-v2
+
 Pipeline:
     PDF files in manuals/  --(pypdf)-->  page text
                           --(chunker)-->  overlapping chunks
                           --(embedder)-->  vectors
                           --(Chroma)-->  persistent collection on disk
 
-At query time we embed the question with the SAME model and ask Chroma for the
-top-k nearest chunks.
-
-V1 baseline settings:
-- Embedder: sentence-transformers/all-MiniLM-L6-v2
-- Chunk size / overlap: 800 / 120
-- Reranker: none
+At query time:
+    user query
+        -> query embedding
+        -> retrieve top candidate chunks from Chroma
+        -> rerank candidates using cross-encoder
+        -> return final top_k chunks
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
 import chromadb
+import torch
 from chromadb.config import Settings
 from pypdf import PdfReader
+from sentence_transformers import CrossEncoder
 
 from embedder import embed_query, embed_texts
 
 
 # ---------------------------------------------------------------------
-# V2 RERANKER SETTINGS — COMMENTED OUT FOR V1 BASELINE
+# FINAL V2 SETTINGS
 # ---------------------------------------------------------------------
-#
-# V2 used a cross-encoder reranker:
-#
-# import torch
-# from functools import lru_cache
-# from sentence_transformers import CrossEncoder
-#
-# RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-# RETRIEVE_CANDIDATES = 20
-#
-#
-# @lru_cache(maxsize=1)
-# def _get_reranker() -> CrossEncoder:
-#     device = "cuda" if torch.cuda.is_available() else "cpu"
-#     print(f"Reranker running on: {device}", flush=True)
-#     return CrossEncoder(RERANKER_MODEL, device=device)
+
+CHUNK_SIZE = 500
+CHUNK_OVERLAP = 80
+
+RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RETRIEVE_CANDIDATES = 20
 
 
 # ---------------------------------------------------------------------
@@ -85,16 +83,40 @@ class RetrievedChunk:
 
 
 # ---------------------------------------------------------------------
+# RERANKER
+# ---------------------------------------------------------------------
+
+@lru_cache(maxsize=1)
+def _get_reranker() -> CrossEncoder:
+    """
+    Load the cross-encoder reranker once per process.
+
+    The reranker scores query-chunk pairs and helps reorder the initially
+    retrieved Chroma results.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    print(f"Reranker model: {RERANKER_MODEL}", flush=True)
+    print(f"Reranker running on: {device}", flush=True)
+
+    return CrossEncoder(
+        RERANKER_MODEL,
+        device=device,
+    )
+
+
+# ---------------------------------------------------------------------
 # PDF READING
 # ---------------------------------------------------------------------
 
 def _read_pdf(path: Path) -> List[tuple[int, str]]:
     """
     Return [(page_number, text), ...] for a single PDF.
+
     Page numbers are 1-indexed.
     """
     reader = PdfReader(str(path))
-    pages = []
+    pages: List[tuple[int, str]] = []
 
     for i, page in enumerate(reader.pages, start=1):
         text = page.extract_text() or ""
@@ -115,21 +137,15 @@ def _read_pdf(path: Path) -> List[tuple[int, str]]:
 
 def _chunk_text(
     text: str,
-    chunk_size: int = 800,
-    overlap: int = 120,
+    chunk_size: int = CHUNK_SIZE,
+    overlap: int = CHUNK_OVERLAP,
 ) -> List[str]:
     """
     Split text into overlapping windows.
 
-    V1 baseline:
-    - chunk_size = 800
-    - overlap = 120
-
-    V2 changed this to:
+    Final V2:
     - chunk_size = 500
     - overlap = 80
-
-    Keep V1 here for the baseline comparison.
     """
     if not text:
         return []
@@ -151,18 +167,23 @@ def _chunk_text(
             if last_break > start + chunk_size // 2:
                 end = last_break + 1
 
-        chunks.append(text[start:end].strip())
+        chunk = text[start:end].strip()
+
+        if chunk:
+            chunks.append(chunk)
 
         if end == n:
             break
 
         start = max(end - overlap, start + 1)
 
-    return [c for c in chunks if c]
+    return chunks
 
 
 def _build_chunks(manuals_dir: Path) -> List[Chunk]:
-    """Walk the manuals folder, parse every PDF, and produce Chunk objects."""
+    """
+    Walk the manuals folder, parse every PDF, and produce Chunk objects.
+    """
     chunks: List[Chunk] = []
     pdfs = sorted(manuals_dir.glob("*.pdf"))
 
@@ -198,8 +219,9 @@ def _get_client() -> chromadb.api.ClientAPI:
 
 def _get_collection(client: chromadb.api.ClientAPI):
     """
-    cosine works because embeddings are normalized in embedder.py.
-    Chroma returns cosine distance, so lower distance means more similar.
+    Use cosine distance because embeddings are normalized in embedder.py.
+
+    Chroma returns cosine distance, where lower distance means more similar.
     """
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
@@ -212,7 +234,9 @@ def _get_collection(client: chromadb.api.ClientAPI):
 # ---------------------------------------------------------------------
 
 def reset_index() -> None:
-    """Drop the collection so the next ingest starts clean."""
+    """
+    Drop the Chroma collection so the next ingest starts clean.
+    """
     client = _get_client()
 
     try:
@@ -224,9 +248,10 @@ def reset_index() -> None:
 
 def ingest(manuals_dir: Optional[Path] = None) -> dict:
     """
-    Re-index every PDF in `manuals_dir`.
+    Re-index every PDF in manuals_dir.
 
-    This wipes the existing Chroma collection and rebuilds it.
+    This wipes the existing Chroma collection and rebuilds it using the
+    current embedder and chunking settings.
     """
     manuals_dir = manuals_dir or MANUALS_DIR
 
@@ -252,7 +277,7 @@ def ingest(manuals_dir: Optional[Path] = None) -> dict:
 
     embeddings = embed_texts(texts)
 
-    # Chroma can blow up with very large single batches, so insert in chunks.
+    # Chroma can fail with very large single batches, so insert in batches.
     batch_size = 256
 
     for i in range(0, len(ids), batch_size):
@@ -275,17 +300,13 @@ def search(
     source: Optional[str] = None,
 ) -> List[RetrievedChunk]:
     """
-    Return the top_k most relevant chunks to `query`.
+    Return the top_k most relevant chunks to query.
 
-    V1 baseline:
-    - Query is embedded with the same embedding model used during ingestion.
-    - Chroma returns top_k chunks directly.
-    - No cross-encoder reranking is applied.
-
-    V2 behavior, currently commented out:
-    - Retrieve top 20 candidates.
-    - Rerank candidates using MS-MARCO MiniLM cross-encoder.
-    - Return top_k reranked chunks.
+    Final V2 behavior:
+    1. Embed the query.
+    2. Retrieve top candidate chunks from Chroma.
+    3. Rerank those candidates with MS-MARCO MiniLM cross-encoder.
+    4. Return top_k reranked chunks.
     """
     client = _get_client()
     coll = _get_collection(client)
@@ -296,83 +317,45 @@ def search(
     query_vec = embed_query(query)
     where = {"source": source} if source else None
 
-    # -----------------------------------------------------------------
-    # V1 BASELINE RETRIEVAL
-    # -----------------------------------------------------------------
+    n_candidates = max(top_k, RETRIEVE_CANDIDATES)
 
     res = coll.query(
         query_embeddings=[query_vec],
-        n_results=top_k,
+        n_results=n_candidates,
         where=where,
         include=["documents", "metadatas", "distances"],
     )
 
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
-    distances = res.get("distances", [[]])[0]
 
     if not docs:
         return []
 
+    reranker = _get_reranker()
+
+    pairs = [(query, doc) for doc in docs]
+    rerank_scores = reranker.predict(pairs)
+
+    indexed = sorted(
+        zip(docs, metas, rerank_scores),
+        key=lambda x: float(x[2]),
+        reverse=True,
+    )[:top_k]
+
     out: List[RetrievedChunk] = []
 
-    for doc, meta, distance in zip(docs, metas, distances):
-        # Chroma returns cosine distance. Convert to similarity-like score.
-        similarity = 1.0 - float(distance)
-
+    for doc, meta, ce_score in indexed:
         out.append(
             RetrievedChunk(
                 text=doc,
                 source=meta.get("source", "unknown"),
                 page=int(meta.get("page", 0)),
-                score=round(similarity, 4),
+                score=round(float(ce_score), 4),
             )
         )
 
     return out
-
-    # -----------------------------------------------------------------
-    # V2 RERANKER RETRIEVAL — COMMENTED OUT FOR V1 BASELINE
-    # -----------------------------------------------------------------
-    #
-    # n_candidates = max(top_k, RETRIEVE_CANDIDATES)
-    #
-    # res = coll.query(
-    #     query_embeddings=[query_vec],
-    #     n_results=n_candidates,
-    #     where=where,
-    #     include=["documents", "metadatas", "distances"],
-    # )
-    #
-    # docs = res.get("documents", [[]])[0]
-    # metas = res.get("metadatas", [[]])[0]
-    #
-    # if not docs:
-    #     return []
-    #
-    # reranker = _get_reranker()
-    # pairs = [(query, doc) for doc in docs]
-    # rerank_scores = reranker.predict(pairs)
-    #
-    # indexed = sorted(
-    #     zip(docs, metas, rerank_scores),
-    #     key=lambda x: float(x[2]),
-    #     reverse=True,
-    # )[:top_k]
-    #
-    # out: List[RetrievedChunk] = []
-    #
-    # for doc, meta, ce_score in indexed:
-    #     out.append(
-    #         RetrievedChunk(
-    #             text=doc,
-    #             source=meta.get("source", "unknown"),
-    #             page=int(meta.get("page", 0)),
-    #             score=round(float(ce_score), 4),
-    #         )
-    #     )
-    #
-    # return out
 
 
 def list_sources() -> List[str]:
