@@ -25,3 +25,10 @@ python-multipart==0.0.19   # for FastAPI file uploads if you add /upload later
 # matplotlib used by train_classifier.py to save the loss-curve plot for the report.
 # numpy is already a transitive dep of torch/sklearn; we pin it lightly via pip's resolver.
 matplotlib==3.9.4
+
+# --- Testing (dev only) ---
+# The pytest suite in backend/tests/ stubs torch/transformers/chromadb when they
+# are absent, so these are the only packages needed to run the tests:
+#   cd backend && pytest
+pytest==8.3.4
+httpx==0.28.1   # required by fastapi.testclient

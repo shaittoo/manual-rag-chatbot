@@ -15,7 +15,7 @@
 
 ## Abstract
 
-**[FILL IN AFTER V1/V2/V3]** *(write this last — 1 paragraph, ~150 words. Should answer: what problem, what we built, what we measured, what we found, what it means.)*
+Product manuals usually contain the answer a user needs, but finding it means searching a long PDF, and keyword search fails when people describe a problem in their own words. We built Manu, a retrieval-augmented chatbot over five appliance manuals: it embeds manual text with MiniLM, retrieves the most relevant passages from a ChromaDB index (with cross-encoder re-ranking in later variants), and generates a grounded answer with cited sources using Phi-3-mini or Qwen-2.5-3B, while a small feed-forward classifier auto-routes each question to the correct manual. We evaluated three pipeline variants on a 25-question set through three independent lenses — an automatic Qwen judge, human review, and RAGAS. Retrieval was strong (context recall ≈ 0.90), but generator faithfulness was the bottleneck (0.18 at baseline, rising to 0.45 after retrieval improvements), and the automatic judge proved far stricter than humans (4% vs 28% on the baseline). Our results indicate that grounding, not retrieval, is the limiting factor — and that the evaluation method itself materially shapes the reported score.
 
 ---
 
@@ -82,19 +82,21 @@ User query ─[MiniLM embedder]──> query vector  ───────┘
 
 **Retriever.** Reads PDFs with `pypdf`, splits each page into overlapping 800-character chunks (120-character overlap), embeds them, and writes the embeddings, raw text, and `(filename, page)` metadata to a persistent ChromaDB collection at `backend/chroma_db/`. At query time we embed the question with the same model and request the top-`k` (default `k=4`) nearest chunks. An optional `source` filter restricts retrieval to a single filename — necessary because our corpus contains five distinct appliance manuals and an unfiltered query can mix chunks across them.
 
-**Generator.** `microsoft/Phi-3-mini-4k-instruct` (3.8B parameters) loaded via Hugging Face `transformers`. The system prompt constrains the model to answer only from retrieved context, refuse if the context does not support an answer, and **not** emit inline citations. Decoding is greedy (`temperature=0.0`) to minimize fabrication.
+**Generator.** Pluggable behind a `GeneratorBackend` protocol with two interchangeable implementations selected per request: `microsoft/Phi-3-mini-4k-instruct` (3.8B parameters) loaded via Hugging Face `transformers`, or `Qwen-2.5-3B` served through a local Ollama HTTP API. Both share one prompt builder. The system prompt constrains the model to answer only from retrieved context, refuse if the context does not support an answer, and **not** emit inline citations. Decoding is greedy (`temperature=0.0`) to minimize fabrication. The generator also accepts optional conversation `history`, so follow-up questions ("what about after that?") stay grounded in the right topic.
 
-**Pipeline orchestrator (`rag_pipeline.ask`).** Composes the three components: retrieve → generate → strip any leftover citations → return a structured `Answer` containing the cleaned text and a list of source records.
+**Pipeline orchestrator (`rag_pipeline.ask`).** Composes the three components: retrieve → generate → strip any leftover citations → return a structured `Answer` containing the cleaned text and a list of source records. It also enriches the retrieval query with recent history so pronoun-laden follow-ups still retrieve the right chunks.
 
-**HTTP API (`main.py`).** FastAPI exposing four endpoints:
+**HTTP API (`main.py`).** FastAPI exposing six endpoints:
 - `GET /health` — liveness check
-- `GET /sources` — list of indexed filenames (for frontend dropdown)
+- `GET /sources` — list of indexed filenames (for the frontend dropdown)
 - `POST /ingest` — wipe and rebuild the Chroma collection from `manuals/`
-- `POST /ask` — RAG query, optionally scoped to a single source
+- `POST /ask` — RAG query, optionally scoped to a single source; accepts `generator_backend` and `history`
+- `POST /classify` — predict which manual a query is about, without retrieval or generation (see §5.6)
+- `POST /ask_auto` — classify → ask in one call, auto-routing to the predicted manual (see §5.6)
 
 ### 2.3 Notable Design Decisions
 
-**Source-filter on `/ask`.** Without filtering, a query like *"how do I reset to factory defaults?"* retrieves chunks from every manual that mentions a reset, and the generator hallucinates a Frankenstein procedure. A user-supplied `source` parameter restricts retrieval to one manual, which is the cheapest way to handle a multi-appliance corpus. (For an automatic version, a manual-classifier stage could be added.)
+**Source-filter on `/ask`.** Without filtering, a query like *"how do I reset to factory defaults?"* retrieves chunks from every manual that mentions a reset, and the generator hallucinates a Frankenstein procedure. A user-supplied `source` parameter restricts retrieval to one manual, which is the cheapest way to handle a multi-appliance corpus. We later added an automatic version — a trained manual-classifier stage exposed via `/ask_auto` — described in §5.6.
 
 **Citation strip post-processing.** Despite being instructed *not* to cite inline, Phi-3-mini repeatedly emitted parenthetical references like `(db05a9.pdf, p. 12)` — and the page numbers were fabricated. In one observed case the model claimed evidence from page 12 when all retrieved chunks were from pages 31–32. Rather than continually re-tuning the prompt, we apply a regex post-filter (`rag_pipeline._strip_model_citations`) that removes any matching pattern. The structured `sources` field returned alongside the answer is built from retriever metadata, not the model's output, so cited sources are guaranteed accurate.
 
@@ -109,22 +111,32 @@ User query ─[MiniLM embedder]──> query vector  ───────┘
 ```
 manu/
 ├── backend/
-│   ├── main.py              # FastAPI app + routes
-│   ├── rag_pipeline.py      # Orchestrates retrieve + generate
+│   ├── main.py              # FastAPI app + 6 routes
+│   ├── rag_pipeline.py      # Orchestrates retrieve + generate (+ history)
 │   ├── embedder.py          # sentence-transformers wrapper (MiniLM)
 │   ├── retriever.py         # PDF parsing, chunking, ChromaDB I/O
-│   ├── generator.py         # Phi-3-mini-4k-instruct via Transformers
+│   ├── generator.py         # Pluggable: Phi-3 (Transformers) / Qwen (Ollama)
+│   ├── manual_classifier.py # FFN classifier inference (auto-routing)
+│   ├── train_classifier.py  # Trains the classifier (k-fold, loss curves)
 │   ├── run_eval.py          # Hits /ask for each question, logs results
 │   ├── score_results.py     # AI-assisted scoring via Ollama+Qwen
 │   ├── run_ragas.py         # RAGAS evaluation
 │   ├── requirements.txt
+│   ├── pytest.ini
+│   ├── tests/               # pytest suite (see §3.5)
 │   └── manuals/             # PDFs (gitignored)
+├── frontend/                # Vite + React chat UI
+│   └── src/
+│       ├── App.jsx          # Chat orchestrator; model dropdown; calls the API
+│       ├── intent.js        # Greeting / thank-you / follow-up detection (testable)
+│       ├── intent.test.js   # Vitest unit tests for the intent heuristics
+│       └── components/       # ChatWindow and message UI
 └── eval/
     ├── questions.json       # 25 questions with reference answers
-    ├── results.csv          # raw /ask outputs
-    ├── results_scored.csv   # Qwen judge labels
+    ├── results_*.csv        # raw /ask outputs (per variant)
+    ├── results_scored_*.csv # Qwen judge labels (per variant)
     ├── human_scored.csv     # human review labels
-    └── ragas_v1.csv         # RAGAS scores (per variant)
+    └── ragas_v{1,2,3}.csv   # RAGAS scores (per variant)
 ```
 
 ### 3.2 Stack
@@ -135,8 +147,10 @@ manu/
 - **Hugging Face Transformers** + **PyTorch** — Phi-3-mini inference
 - **pypdf** — PDF text extraction
 - **RAGAS** — evaluation framework
-- **Ollama** + **Qwen-2.5-3B** — local LLM judge for scoring
+- **Ollama** + **Qwen-2.5-3B** — local LLM judge for scoring, and an alternate generator backend
 - **LangChain (Ollama / HuggingFace adapters)** — bridging Ollama and RAGAS
+- **Vite + React** — frontend chat UI (model dropdown, sources panel, follow-up handling)
+- **pytest** (backend) + **Vitest** (frontend) — automated test suites (see §3.5)
 
 ### 3.3 Hardware
 
@@ -157,6 +171,18 @@ This project uses deep learning at three layers of the pipeline plus one compone
 **(iv) Manual classifier (small FFN, trained end-to-end by us).** We train a feed-forward neural network on top of frozen MiniLM embeddings to predict which manual a query is about (described in detail in §5.6). This is the only component of the system whose weights are updated by gradient descent in our work; everything else is pretrained. *DL concepts demonstrated: supervised classification, feed-forward networks, ReLU non-linearity, dropout regularization, transfer learning (frozen embedder + trainable head), cross-entropy loss, Adam optimization with weight decay (L2 regularization), k-fold cross-validation, data augmentation.*
 
 The project is therefore not "RAG without deep learning" — every component on the inference path is a deep neural network, and one of them is trained end-to-end with the full supervised-learning workflow. What this project does *not* include, and which would be obvious next steps, is fine-tuning the larger pretrained components (e.g., LoRA on Phi-3-mini against a synthesized Q-A dataset from the manuals); we discuss these in §7.2.
+
+### 3.5 Testing and Verification
+
+Separately from the answer-quality evaluation (§4), the codebase carries an automated test suite that verifies *program behaviour* — logic that can be checked deterministically without loading a model.
+
+**Backend (`backend/tests/`, pytest — 46 tests).** Coverage includes: the chunking windows in `retriever._chunk_text` (size, overlap, sentence-boundary snapping, empty input); the citation-stripping safety net `rag_pipeline._strip_model_citations`; source/snippet shaping and history-aware retrieval-query construction; the generator's prompt and history formatting; the `get_generator` factory and the Ollama backend's graceful fallback when the server is unreachable; and the FastAPI request contract (`/health`, request-validation 422s, and `/ask`, `/sources`, `/classify`, `/ask_auto` happy paths with the model layer monkeypatched). A `conftest.py` registers lightweight stubs for `torch`, `transformers`, `sentence-transformers`, and `chromadb` **only when those libraries are absent**, so the same tests run unchanged on a lightweight CI box and on the full GPU machine — without downloading the ~7 GB model stack.
+
+**Eval-set validation.** `test_eval_dataset.py` asserts that `eval/questions.json` is well-formed: 25 entries, required keys present, unique IDs, the `type` field within `{factual, procedural, tricky}`, substantive reference answers, and at least two questions per manual. This guards the evaluation harness against a malformed entry silently skewing reported accuracy.
+
+**Frontend (`frontend/src/intent.test.js`, Vitest — 25 assertions).** The pre-network routing heuristics — greeting, thank-you, and follow-up detection — were extracted from `App.jsx` into a standalone `intent.js` module specifically so they can be unit-tested in isolation. The tests pin down the behaviour that most affects UX: that greetings and thank-yous are answered locally, that a clearly named new topic is *not* treated as a follow-up (avoiding conversation-history contamination), and that short pronoun-based questions are.
+
+**Scope.** These tests verify code logic, not answer quality; the latter still requires the live model and is what §4's three scoring lenses measure. The split is deliberate: fast, deterministic tests for the code, and a separate model-in-the-loop evaluation for the system's outputs.
 
 ---
 
@@ -459,7 +485,9 @@ A 3B-parameter judge, when run on CPU with default `max_workers=2` concurrency, 
 
 **Shaina Talisay.** Initial backend implementation including the FastAPI HTTP layer, ChromaDB integration, and the Phi-3-mini generator pipeline. Source-filter on `/ask` and the citation-strip post-processor. Human review of all 25 evaluation rows.
 
-**Duranne B. Duran.** 25-question evaluation set with manually verified reference answers. `run_eval.py` harness for batch RAG queries. `score_results.py` AI-assisted Correct/Partial/Wrong/Refused scoring pipeline using Ollama+Qwen. RAGAS evaluation infrastructure (`run_ragas.py`).
+**Duranne B. Duran.** 25-question evaluation set with manually verified reference answers. `run_eval.py` harness for batch RAG queries. `score_results.py` AI-assisted Correct/Partial/Wrong/Refused scoring pipeline using Ollama+Qwen. RAGAS evaluation infrastructure (`run_ragas.py`). Vite + React frontend chat UI — model dropdown, sources panel, and the greeting/thank-you/follow-up routing heuristics.
+
+**Testing and verification.** Automated test suites (`backend/tests/` via pytest, `frontend/src/intent.test.js` via Vitest, and the eval-set validator) described in §3.5. **[CONFIRM authorship/attribution for the frontend and tests with your team before submitting.]**
 
 **Joint.** Evaluation methodology design, results analysis, and report.
 
@@ -486,6 +514,7 @@ A 3B-parameter judge, when run on CPU with default `max_workers=2` concurrency, 
 - Python: 3.11.9
 - All Python dependencies pinned in `backend/requirements.txt`
 - Manual PDFs are gitignored due to copyright; reproducing the exact eval requires identical PDF copies. Filenames and SHA-256 hashes are listed in `eval/manuals_inventory.txt` **[OPTIONAL: produce this file if your professor wants reproducibility.]**
+- Run the test suites: `cd backend && pytest` (backend logic + eval-set validation; no model download required) and `cd frontend && npm test` (frontend intent heuristics via Vitest).
 
 ## Appendix B — Eval set summary statistics
 
