@@ -229,11 +229,6 @@ def ask_endpoint(req: AskRequest) -> AskResponse:
 
 
 # --- Manual classifier (auto-routing) ------------------------------------
-#
-# These two endpoints are gated by the trained weights existing on disk.
-# If `manual_classifier.pt` isn't present, both endpoints return 503 with a
-# helpful message rather than crashing — useful for partial deployments where
-# the classifier hasn't been trained yet or has been deliberately disabled.
 
 def _load_classifier_or_fail():
     """Lazy import + clean error if weights are missing."""

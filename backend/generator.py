@@ -428,16 +428,7 @@ def generate(
     temperature: float = 0.0,
     history: Optional[List[dict]] = None,
 ) -> str:
-    """
-    Generate an answer grounded in the retrieved chunks.
-
-    The frontend can switch models per request by sending:
-        generator_backend="transformers"
-        generator_backend="ollama"
-
-    The frontend can also pass recent chat turns through `history`
-    for conversational follow-up questions.
-    """
+ 
     generator = get_generator(generator_backend)
 
     return generator.generate(

@@ -3,14 +3,12 @@ embedder.py
 -----------
 Thin wrapper around sentence-transformers.
 
-Why a wrapper?
-- Keeps the embedding model name in one place so we can swap it later
-  without touching retriever logic.
-- Lazy-loads the model: the first call downloads/loads weights; later calls reuse
-  the cached instance. This matters because FastAPI workers reuse the module.
+Final retrieval setup:
+- Model: BAAI/bge-small-en-v1.5
+- Output vector size: 384 dimensions
+- Embeddings are normalized for cosine similarity in ChromaDB.
 
-V1 baseline:
-- Model: sentence-transformers/all-MiniLM-L6-v2
+Important:
 - ChromaDB must be re-ingested whenever the embedding model changes.
 """
 
@@ -27,11 +25,11 @@ from sentence_transformers import SentenceTransformer
 # CONFIG
 # ---------------------------------------------------------------------
 
-# V1 baseline model
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# Final V2 embedder
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
-# V2 model, kept here for easy switching later:
-# DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
+# V1 baseline embedder, kept only for reference:
+# DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 # ---------------------------------------------------------------------
@@ -50,9 +48,10 @@ def get_device() -> str:
 @lru_cache(maxsize=1)
 def _get_model(model_name: str = DEFAULT_MODEL) -> SentenceTransformer:
     """
-    Cache the model in memory so we only pay the load cost once per process.
+    Cache the embedding model in memory so it only loads once per process.
     """
     device = get_device()
+    print(f"Embedder model: {model_name}", flush=True)
     print(f"Embedder running on: {device}", flush=True)
 
     return SentenceTransformer(
@@ -70,9 +69,9 @@ def embed_texts(
     model_name: str = DEFAULT_MODEL,
 ) -> List[List[float]]:
     """
-    Embed a batch of documents/chunks.
+    Embed a batch of manual chunks.
 
-    Returns a list of float lists because Chroma accepts this directly.
+    Returns a list of float lists because Chroma accepts this format directly.
     """
     if not texts:
         return []
@@ -97,8 +96,6 @@ def embed_query(
     model_name: str = DEFAULT_MODEL,
 ) -> List[float]:
     """
-    Embed a single user question.
-
-    Uses the same model and normalization as document chunk embeddings.
+    Embed one user query using the same model and normalization as the chunks.
     """
     return embed_texts([text], model_name=model_name)[0]
