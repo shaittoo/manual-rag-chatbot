@@ -1,15 +1,10 @@
 """
-embedder.py
------------
 Thin wrapper around sentence-transformers.
 
 Final retrieval setup:
 - Model: BAAI/bge-small-en-v1.5
 - Output vector size: 384 dimensions
 - Embeddings are normalized for cosine similarity in ChromaDB.
-
-Important:
-- ChromaDB must be re-ingested whenever the embedding model changes.
 """
 
 from __future__ import annotations
@@ -37,7 +32,6 @@ DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 # ---------------------------------------------------------------------
 
 def get_device() -> str:
-    """Use CUDA if available; otherwise fall back to CPU."""
     return "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -47,9 +41,7 @@ def get_device() -> str:
 
 @lru_cache(maxsize=1)
 def _get_model(model_name: str = DEFAULT_MODEL) -> SentenceTransformer:
-    """
-    Cache the embedding model in memory so it only loads once per process.
-    """
+    # Cache the embedding model in memory so it only loads once per process.
     device = get_device()
     print(f"Embedder model: {model_name}", flush=True)
     print(f"Embedder running on: {device}", flush=True)
@@ -68,11 +60,9 @@ def embed_texts(
     texts: List[str],
     model_name: str = DEFAULT_MODEL,
 ) -> List[List[float]]:
-    """
-    Embed a batch of manual chunks.
+    # Embed a batch of manual chunks.
 
-    Returns a list of float lists because Chroma accepts this format directly.
-    """
+    # Returns a list of float lists because Chroma accepts this format directly.
     if not texts:
         return []
 
@@ -95,7 +85,7 @@ def embed_query(
     text: str,
     model_name: str = DEFAULT_MODEL,
 ) -> List[float]:
-    """
-    Embed one user query using the same model and normalization as the chunks.
-    """
+    
+    # Embed one user query using the same model and normalization as the chunks.
+    
     return embed_texts([text], model_name=model_name)[0]

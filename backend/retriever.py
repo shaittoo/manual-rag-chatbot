@@ -67,7 +67,6 @@ COLLECTION_NAME = "manuals"
 
 @dataclass
 class Chunk:
-    """One retrievable unit of text and its source location."""
     text: str
     source: str
     page: int
@@ -75,7 +74,6 @@ class Chunk:
 
 @dataclass
 class RetrievedChunk:
-    """One retrieved chunk returned to the RAG pipeline."""
     text: str
     source: str
     page: int
@@ -88,12 +86,6 @@ class RetrievedChunk:
 
 @lru_cache(maxsize=1)
 def _get_reranker() -> CrossEncoder:
-    """
-    Load the cross-encoder reranker once per process.
-
-    The reranker scores query-chunk pairs and helps reorder the initially
-    retrieved Chroma results.
-    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     print(f"Reranker model: {RERANKER_MODEL}", flush=True)
@@ -110,11 +102,6 @@ def _get_reranker() -> CrossEncoder:
 # ---------------------------------------------------------------------
 
 def _read_pdf(path: Path) -> List[tuple[int, str]]:
-    """
-    Return [(page_number, text), ...] for a single PDF.
-
-    Page numbers are 1-indexed.
-    """
     reader = PdfReader(str(path))
     pages: List[tuple[int, str]] = []
 
@@ -140,13 +127,6 @@ def _chunk_text(
     chunk_size: int = CHUNK_SIZE,
     overlap: int = CHUNK_OVERLAP,
 ) -> List[str]:
-    """
-    Split text into overlapping windows.
-
-    Final V2:
-    - chunk_size = 500
-    - overlap = 80
-    """
     if not text:
         return []
 
@@ -181,9 +161,6 @@ def _chunk_text(
 
 
 def _build_chunks(manuals_dir: Path) -> List[Chunk]:
-    """
-    Walk the manuals folder, parse every PDF, and produce Chunk objects.
-    """
     chunks: List[Chunk] = []
     pdfs = sorted(manuals_dir.glob("*.pdf"))
 
@@ -218,11 +195,6 @@ def _get_client() -> chromadb.api.ClientAPI:
 
 
 def _get_collection(client: chromadb.api.ClientAPI):
-    """
-    Use cosine distance because embeddings are normalized in embedder.py.
-
-    Chroma returns cosine distance, where lower distance means more similar.
-    """
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
         metadata={"hnsw:space": "cosine"},
@@ -234,9 +206,6 @@ def _get_collection(client: chromadb.api.ClientAPI):
 # ---------------------------------------------------------------------
 
 def reset_index() -> None:
-    """
-    Drop the Chroma collection so the next ingest starts clean.
-    """
     client = _get_client()
 
     try:
@@ -247,12 +216,6 @@ def reset_index() -> None:
 
 
 def ingest(manuals_dir: Optional[Path] = None) -> dict:
-    """
-    Re-index every PDF in manuals_dir.
-
-    This wipes the existing Chroma collection and rebuilds it using the
-    current embedder and chunking settings.
-    """
     manuals_dir = manuals_dir or MANUALS_DIR
 
     if not manuals_dir.exists():
@@ -359,11 +322,6 @@ def search(
 
 
 def list_sources() -> List[str]:
-    """
-    Return all unique source filenames currently in the index.
-
-    Used by the frontend to populate a manual/source dropdown.
-    """
     client = _get_client()
     coll = _get_collection(client)
 

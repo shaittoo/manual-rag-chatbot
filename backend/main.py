@@ -1,7 +1,5 @@
 """
-main.py
--------
-FastAPI entrypoint. Endpoints:
+endpoints:
 
     GET  /health             -> liveness check
     GET  /sources            -> list filenames currently in the index
@@ -11,7 +9,7 @@ FastAPI entrypoint. Endpoints:
     POST /ask_auto {query}   -> classify -> ask: auto-routes the query to the predicted manual
 
 Run locally:
-    cd manu/backend
+    cd backend
     uvicorn main:app --reload --port 8000
 """
 
@@ -33,8 +31,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS: open in dev so the Vite frontend on a different port can call us.
-# Tighten this to specific origins before any kind of deployment.
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -130,9 +127,9 @@ class AskAutoResponse(BaseModel):
 # --- Helpers -------------------------------------------------------------
 
 def _history_as_dicts(history: list[ChatMessage]) -> list[dict]:
-    """
-    Convert Pydantic chat messages into plain dicts for rag_pipeline.py.
-    """
+    
+    # Convert chat messages into plain dicts for rag_pipeline.py.
+    
     return [
         {
             "role": msg.role,
@@ -144,17 +141,12 @@ def _history_as_dicts(history: list[ChatMessage]) -> list[dict]:
 
 
 def _conversation_aware_query(query: str, history: list[ChatMessage]) -> str:
-    """
-    Build a richer query for classifier routing.
-
-    This helps when the user asks follow-up questions like:
-        "What if it still does not work?"
-        "Can I do that again?"
-        "What about after that?"
-
-    The classifier gets the recent conversation plus the current question,
-    so it can still route to the correct manual.
-    """
+    
+    #  helps when the user asks follow-up questions like:
+    #     "What if it still does not work?"
+    #     "Can I do that again?"
+    #     "What about after that?"
+    
     query = query.strip()
 
     if not history:
@@ -193,11 +185,7 @@ def health() -> dict:
 
 @app.post("/ingest", response_model=IngestResponse)
 def ingest_endpoint() -> IngestResponse:
-    """
-    Wipe the Chroma collection and rebuild from manuals/.
-    Synchronous on purpose — for a mini-project the simplicity beats async complexity.
-    For larger corpora you'd want a background task + progress endpoint.
-    """
+
     try:
         report = ingest()
     except FileNotFoundError as e:
@@ -211,7 +199,7 @@ def ingest_endpoint() -> IngestResponse:
 
 @app.get("/sources", response_model=SourcesResponse)
 def sources_endpoint() -> SourcesResponse:
-    """Return all unique filenames currently indexed in Chroma."""
+    # Return all unique filenames currently indexed in Chroma.
     return SourcesResponse(sources=list_sources())
 
 
@@ -231,9 +219,9 @@ def ask_endpoint(req: AskRequest) -> AskResponse:
 # --- Manual classifier (auto-routing) ------------------------------------
 
 def _load_classifier_or_fail():
-    """Lazy import + clean error if weights are missing."""
+    # Lazy import + clean error if weights are missing.
     try:
-        from manual_classifier import predict_full  # noqa: WPS433
+        from manual_classifier import predict_full  
 
         return predict_full
 
@@ -249,12 +237,8 @@ def _load_classifier_or_fail():
 
 @app.post("/classify", response_model=ClassifyResponse)
 def classify_endpoint(req: ClassifyRequest) -> ClassifyResponse:
-    """
-    Predict which manual a query is about, without running RAG.
-
-    For follow-up questions, we include recent conversation history in the
-    classifier query so vague questions can still be routed correctly.
-    """
+    
+    # Predict which manual a query is about, without running RAG.
     predict_full = _load_classifier_or_fail()
 
     classifier_query = _conversation_aware_query(req.query, req.history)
@@ -265,13 +249,10 @@ def classify_endpoint(req: ClassifyRequest) -> ClassifyResponse:
 
 @app.post("/ask_auto", response_model=AskAutoResponse)
 def ask_auto_endpoint(req: AskAutoRequest) -> AskAutoResponse:
-    """
-    Classify -> ask. The user doesn't have to pick a manual; we predict it.
 
-    This also supports:
-    - generator dropdown via generator_backend
-    - follow-up questions via history
-    """
+    # Classify -> ask. The user doesn't have to pick a manual; we predict it.
+
+    
     predict_full = _load_classifier_or_fail()
 
     classifier_query = _conversation_aware_query(req.query, req.history)

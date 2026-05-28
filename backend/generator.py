@@ -1,8 +1,4 @@
 """
-generator.py
-------------
-Pluggable generator backend for the manual RAG chatbot.
-
 Backends:
 1. TransformersGenerator
    - Phi-3-mini-4k-instruct via Hugging Face Transformers.
@@ -10,10 +6,6 @@ Backends:
 2. OllamaGenerator
    - Qwen via local Ollama HTTP API.
    - Default Ollama URL: http://localhost:11434/api/generate
-
-Supports:
-- frontend dropdown model switching
-- conversational / follow-up questions through chat history
 """
 
 from __future__ import annotations
@@ -85,9 +77,7 @@ SYSTEM_PROMPT = (
 )
 
 def _format_context(chunks: List[RetrievedChunk]) -> str:
-    """
-    Render retrieved chunks as a numbered context block.
-    """
+    #Render retrieved chunks as a numbered context block.
     if not chunks:
         return "(no context retrieved)"
 
@@ -101,15 +91,15 @@ def _format_context(chunks: List[RetrievedChunk]) -> str:
 
 
 def _format_history(history: Optional[List[dict]]) -> str:
-    """
-    Format recent chat history for follow-up questions.
+  
+    #Format recent chat history for follow-up questions.
 
-    Expected shape:
-        [
-            {"role": "user", "content": "..."},
-            {"role": "assistant", "content": "..."}
-        ]
-    """
+    #Expected shape:
+    #   [
+    #      {"role": "user", "content": "..."},
+    #      {"role": "assistant", "content": "..."}
+    #  ]
+   
     if not history:
         return "(no previous conversation)"
 
@@ -138,12 +128,7 @@ def _build_messages(
     chunks: List[RetrievedChunk],
     history: Optional[List[dict]] = None,
 ) -> list[dict[str, str]]:
-    """
-    Build one shared prompt structure for both backends.
-
-    Transformers uses this as chat messages.
-    Ollama converts this same structure into a plain prompt.
-    """
+ 
     context = _format_context(chunks)
     conversation = _format_history(history)
 
@@ -172,9 +157,7 @@ def _build_messages(
 
 
 def _messages_to_plain_prompt(messages: list[dict[str, str]]) -> str:
-    """
-    Convert the shared message structure into a plain prompt for Ollama /api/generate.
-    """
+    #Convert the shared message structure into a #plain prompt for Ollama /api/generate.
     system_content = ""
     user_content = ""
 
@@ -232,9 +215,7 @@ class TransformersGenerator:
         return "cpu", torch.float32
 
     def _load(self):
-        """
-        Load tokenizer + model once per process.
-        """
+        #autotokenizer
         device, dtype = self._device_and_dtype()
 
         tokenizer = AutoTokenizer.from_pretrained(

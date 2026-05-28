@@ -1,0 +1,126 @@
+\documentclass[runningheads]{llncs}
+
+%for appendix code
+\usepackage{listings}
+
+\lstdefinestyle{pythoncode}{
+    language=Python,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\bfseries,
+    commentstyle=\itshape,
+    stringstyle=\ttfamily,
+    numbers=left,
+    numberstyle=\tiny,
+    stepnumber=1,
+    numbersep=6pt,
+    frame=single,
+    breaklines=true,
+    breakatwhitespace=false,
+    showstringspaces=false,
+    tabsize=4,
+    captionpos=b
+}
+
+
+\usepackage[T1]{fontenc}
+% T1 fonts will be used to generate the final print and online PDFs,
+% so please use T1 fonts in your manuscript whenever possible.
+% Other font encodings may result in incorrect characters.
+
+\usepackage{placeins}
+
+\usepackage{tabularx}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+
+\usepackage{graphicx}
+% Used for including figures.
+
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+
+\usepackage{array}
+\usepackage{makecell}
+
+\newcolumntype{M}[1]{>{\raggedright\arraybackslash}m{#1}}
+
+\usepackage{array}
+\usepackage{makecell}
+
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% Optional URL styling following the LNCS sample comment
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage{makecell}
+\usepackage{multirow}
+\renewcommand\UrlFont{\color{blue}\rmfamily}
+
+%for tables
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\urlstyle{rm}
+
+\usepackage{longtable}
+\usepackage{array}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+
+
+
+\raggedbottom
+
+\begin{document}
+
+\title{A Retrieval-Augmented Chatbot for Product Manuals%
+}
+
+\titlerunning{Chatbot for Product Manuals}
+
+\author{Duranne Duran \and
+Shaina Marie Talisay}
+
+\authorrunning{D. Duran \and S. Talisay}
+
+\institute{University of the Philippines Visayas\\
+\email{dbduran@up.edu.ph, sdtalisay@up.edu.ph}}
+
+\maketitle
+
+% \begin{abstract}
+% Around 150--250 words.
+
+% \keywords{News credibility \and Supervised learning \and Machine learning \and Model comparison}
+% \end{abstract}
+
+\input{sections/01-intro}
+
+\input{sections/02-related-works}
+
+\input{sections/03-method}
+
+\input{sections/04-results}
+
+\input{sections/05-conclusion}
+
+
+% \input{sections/06-appendix}
+
+% \begin{credits}
+% \subsubsection{\ackname}
+% Add funding, institutional, or project acknowledgements here.
+
+% \subsubsection{\discintname}
+% The authors have no competing interests to declare that are relevant to the content of this article.
+% \end{credits}
+
+\input{sections/appendix}
+
+\bibliographystyle{splncs04}
+\bibliography{refs}
+
+
+\end{document}

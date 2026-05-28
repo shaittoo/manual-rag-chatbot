@@ -1,0 +1,36 @@
+\section{Introduction}
+
+\subsection{Background}
+
+Product manuals are intended to guide users in operating, maintaining, and troubleshooting appliances and devices. However, these manuals are often distributed as long PDF documents containing dense technical instructions, diagrams, warnings, and troubleshooting tables. For users who need quick answers to specific problems, manually searching through these documents can be time-consuming and difficult. Traditional keyword search may also fail when users describe their problems in everyday language instead of using the exact terms found in the manual.
+
+Retrieval-Augmented Generation, or RAG, combines document retrieval with a language model. Instead of relying only on the language model's stored knowledge, a RAG system first retrieves relevant passages from a document collection and then generates an answer based on those retrieved passages.
+
+In this project, the system applies RAG to product user manuals. The system processes appliance manuals, converts their text into vector embeddings, stores them in a searchable vector database, retrieves relevant chunks based on the user's question, and generates a grounded response using a language model. It also includes an automatic manual-classification component that predicts which manual a user's question is about, reducing the need for users to manually select the correct source document.
+
+\subsection{Project Statement}
+
+Users often struggle to find specific troubleshooting or procedural information in product manuals because these documents are lengthy, technical, and difficult to search using natural language queries. The wording used by users may differ from the exact terms used in the manual, making relevant information harder to locate.
+
+This project addresses the problem by developing a retrieval-augmented chatbot that retrieves relevant passages from multiple appliance manuals and generates grounded natural-language answers. It also evaluates different RAG pipeline configurations using automatic scoring, human review, and RAGAS metrics to assess retrieval quality, answer relevance, and faithfulness to the source material.
+
+\subsection{Project Objectives}
+
+The general objective of this project is to develop and evaluate a retrieval-augmented chatbot that can answer user questions grounded in product manuals.
+
+Specifically, the project aims to:
+
+\begin{enumerate}
+    \item Design and implement a RAG-based question-answering pipeline for multiple appliance manuals.
+
+    \item Generate vector embeddings for manual chunks using transformer-based sentence embedding models.
+
+    \item Store and retrieve relevant manual passages using a vector database.
+
+    \item Train a small feed-forward classifier to predict the correct manual for a given user query.
+
+    \item Compare different RAG pipeline variants in terms of retrieval quality, answer relevance, faithfulness, and latency.
+
+    \item Evaluate the system using multiple methods, including AI-assisted scoring, human review, and RAGAS metrics.
+
+\end{enumerate}
