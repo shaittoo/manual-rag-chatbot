@@ -1,0 +1,13 @@
+\section{Conclusion}
+
+The results show that the system can retrieve relevant information from multiple product manuals, but answer generation remains the main challenge. Although the retriever achieved high context precision, the lower faithfulness scores indicate that the generator sometimes produced unsupported, incomplete, or less focused answers.
+
+Among the three variants, V2 produced the best grounding performance. V2 refers to the improved retrieval configuration that used \texttt{BAAI/bge-small-en-v1.5} for embeddings, 500-character chunks with 80-character overlap, \texttt{cross-encoder/\newline ms-marco-MiniLM-L-6-v2} for re-ranking, and \texttt{Phi-3-mini} as the generator. This setup increased faithfulness, showing that better context selection can reduce unsupported generation. However, its lower context recall suggests that smaller chunks may lose useful surrounding information, especially for longer step-by-step procedures.
+
+The generator comparison also showed that model choice affects both answer quality and runtime. Qwen-2.5-3B did not outperform Phi-3-mini in answer quality, suggesting that stronger models, fine-tuning, or more controlled prompting may be needed to improve generated answers. However, Qwen-2.5-3B through Ollama was faster in the tested local environment, generating responses in approximately 48 seconds while Phi-3-mini through Hugging Face Transformers took about 3 minutes. 
+
+The evaluation also showed that scoring method affects the reported results. The Qwen-based judge gave lower scores than human review, indicating that small local LLMs may be too strict or inconsistent as standalone evaluators. Using multiple evaluation methods therefore provided a more balanced assessment of the system.
+
+Overall, the project demonstrates that a RAG-based chatbot can make product manuals easier to use by retrieving relevant passages and generating direct answers. The strongest component of the system is retrieval, while the main area for improvement is generating answers that are fully faithful, complete, and focused on the retrieved manual context.
+
+For future work, the system may be improved through hybrid chunking, where shorter chunks are used for specific troubleshooting facts and larger merged chunks are used for complete procedures. Future versions may also test stronger or fine-tuned generator models, evaluate the manual classifier using stricter data splits, support scanned manuals through OCR, add streaming responses and conversational memory, and use a larger evaluation set for more reliable performance measurement.

@@ -104,9 +104,8 @@ def call_ollama(prompt: str, timeout: int = 180) -> str:
 
 
 def extract_json(text: str) -> dict[str, str]:
-    """
-    Tries to parse JSON even if the model accidentally adds extra text.
-    """
+
+    # Tries to parse JSON even if the model accidentally adds extra text.
     text = text.strip()
 
     if text.startswith("```"):

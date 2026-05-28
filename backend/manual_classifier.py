@@ -55,7 +55,7 @@ N_CLASSES = 5            # 5 appliance manuals
 
 
 class ManualClassifier(nn.Module):
-    """Tiny feed-forward classifier head over frozen MiniLM embeddings."""
+    # Tiny feed-forward classifier head over frozen MiniLM embeddings.
 
     def __init__(
         self,
@@ -73,7 +73,7 @@ class ManualClassifier(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Returns raw logits (apply softmax for probabilities)."""
+        # Returns raw logits (apply softmax for probabilities).
         return self.net(x)
 
 
@@ -81,7 +81,7 @@ class ManualClassifier(nn.Module):
 
 @lru_cache(maxsize=1)
 def _load_labels() -> List[str]:
-    """Load the ordered list of manual filenames. Index -> filename."""
+    # Load the ordered list of manual filenames. Index -> filename.
     if not LABELS_FILE.exists():
         raise FileNotFoundError(
             f"Label map not found at {LABELS_FILE}. "
@@ -93,7 +93,7 @@ def _load_labels() -> List[str]:
 
 @lru_cache(maxsize=1)
 def _load_classifier() -> ManualClassifier:
-    """Load trained weights into a fresh ManualClassifier instance."""
+    # Load trained weights into a fresh ManualClassifier instance.
     if not MODEL_WEIGHTS.exists():
         raise FileNotFoundError(
             f"Trained weights not found at {MODEL_WEIGHTS}. "
@@ -107,7 +107,7 @@ def _load_classifier() -> ManualClassifier:
 
 
 def _embed_query(query: str) -> torch.Tensor:
-    """Embed a query with the same MiniLM the classifier was trained on."""
+    # Embed a query with the same MiniLM the classifier was trained on.
     embedder = _get_embedder_model("sentence-transformers/all-MiniLM-L6-v2")
     vec = embedder.encode(
         [query],
@@ -119,12 +119,12 @@ def _embed_query(query: str) -> torch.Tensor:
 
 
 def predict(query: str) -> Tuple[str, float]:
-    """
-    Predict which manual a query is about.
+   
+    # Predict which manual a query is about.
 
-    Returns (filename, confidence) where confidence is the softmax probability
-    assigned to the predicted class.
-    """
+    # Returns (filename, confidence) where confidence is the softmax probability
+    # assigned to the predicted class.
+   
     classifier = _load_classifier()
     labels = _load_labels()
 
@@ -138,10 +138,10 @@ def predict(query: str) -> Tuple[str, float]:
 
 
 def predict_full(query: str) -> dict:
-    """
-    Predict + return the full probability distribution.
-    Useful for debugging and for showing 'top-3 candidates' in the UI.
-    """
+   
+    # Predict + return the full probability distribution.
+    # Useful for debugging and for showing 'top-3 candidates' in the UI.
+   
     classifier = _load_classifier()
     labels = _load_labels()
 
